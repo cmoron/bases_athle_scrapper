@@ -96,15 +96,20 @@ def create_athletes_table(cursor: sqlite3.Cursor):
     """
     cursor.execute('CREATE TABLE IF NOT EXISTS athletes (id TEXT PRIMARY KEY, name TEXT)')
 
-def retrieve_clubs(cursor: sqlite3.Cursor) -> dict:
+def retrieve_clubs(cursor: sqlite3.Cursor, club_id: str, year: int) -> dict:
     """
-    Retrieve the clubs from the database
+    Retrieve the clubs from the database only if the last year is greater or equal to the given year
     Args:
         cursor (sqlite3.Cursor): The cursor to execute SQL commands
+        club_id (str): The club ID
+        year (int): The year
     Returns:
         dict: The clubs
     """
-    cursor.execute('SELECT * FROM clubs')
+    if club_id:
+        cursor.execute('SELECT id, name FROM clubs WHERE id = ?', (club_id,))
+    else:
+        cursor.execute('SELECT id, name FROM clubs WHERE first_year <= ? AND last_year >= ?', (year, year))
     return dict(cursor.fetchall())
 
 def extract_athletes_from_club(year: int, club_id: str) -> dict:
@@ -132,21 +137,25 @@ def main():
     Main function
     """
     parser = argparse.ArgumentParser(description="List athletes from a SQLite database file containing clubs id.")
+    parser.add_argument('--first-year', type=int, default=FIRST_YEAR, help='First year of the database.')
+    parser.add_argument('--last-year', type=int, default=datetime.now().year, help='Last year of the database.')
+    parser.add_argument('--club-id', type=str, help='Club ID to extract athletes from.')
     parser.add_argument('database', type=str, help='Path to the SQLite3 clubs database file.')
     args = parser.parse_args()
-    current_year = datetime.now().year
+    first_year = args.first_year
+    last_year = args.last_year
 
     try:
         with sqlite3.connect(args.database) as conn:
             cursor = conn.cursor()
             create_athletes_table(cursor)
-            clubs = retrieve_clubs(cursor)
-            nb_clubs = len(clubs)
-            cpt = 0
+            for year in range(first_year, last_year + 1):
+                clubs = retrieve_clubs(cursor, args.club_id, year)
+                nb_clubs = len(clubs)
+                cpt = 0
 
-            for club_id in clubs:
-                cpt += 1
-                for year in range(FIRST_YEAR, current_year + 1):
+                for club_id in clubs:
+                    cpt += 1
                     print(f"{cpt} / {nb_clubs} - Processing club {clubs[club_id]} for year {year}")
                     athletes = extract_athletes_from_club(year, club_id)
                     store_athletes(athletes, cursor)

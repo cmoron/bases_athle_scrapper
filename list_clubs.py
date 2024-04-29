@@ -46,6 +46,7 @@ def extract_clubs(clubs: dict, year: int) -> dict:
 
     Returns:
         dict: Dictionnaire des clubs d'athlétisme avec leur ID comme clé
+              et leur nom et année comme valeur
     """
     max_club_pages = get_max_club_pages(year)
     club_base_url = BASES_ATHLE_URL + f'/asp.net/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmposition='
@@ -67,27 +68,34 @@ def extract_clubs(clubs: dict, year: int) -> dict:
                 match = re.search(r'&frmnclub=(\d+)&', url)
                 if match:
                     club_id = match.group(1)
-                    clubs[club_id] = club_name
+                    if club_id not in clubs:
+                        clubs[club_id] = (club_name, year, year)
+                    else:
+                        clubs[club_id] = (club_name, min(clubs[club_id][1], year), max(clubs[club_id][2], year))
 
     return clubs
 
-def store_clubs(clubs: dict):
+def store_clubs(database: str, clubs: dict):
     """
     Stocke les clubs dans une base de données
 
     Args:
+        database (str): Chemin vers la base de données SQLite3
         clubs (dict): Dictionnaire des clubs
     """
     # Create a sqlite3 database to store clubs
-    with sqlite3.connect('clubs.db') as conn:
+    with sqlite3.connect(database) as conn:
         cursor = conn.cursor()
         # Create a table to store clubs only if it does not exist
-        cursor.execute('CREATE TABLE IF NOT EXISTS clubs (id TEXT PRIMARY KEY, name TEXT)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS clubs (id TEXT PRIMARY KEY, name TEXT, first_year INTEGER DEFAULT 0, last_year INTEGER DEFAULT 0)')
 
-        for club_id, name in clubs.items():
+        for club_id, club in clubs.items():
+            name = club[0]
+            first_year = club[1]
+            last_year = club[2]
+
             # Insert the club if it does not exist
-            # The club ID is the primary key as string
-            cursor.execute('INSERT OR IGNORE INTO clubs (id, name) VALUES (?, ?)', (club_id, name))
+            cursor.execute('INSERT OR IGNORE INTO clubs (id, name, first_year, last_year) VALUES (?, ?, ?, ?)', (club_id, name, first_year, last_year))
 
 def main():
     """
@@ -95,8 +103,8 @@ def main():
     """
     parser = argparse.ArgumentParser(
         description="Récupère les données des clubs d'athlétisme FFA sur bases.athle")
-
-    parser.parse_args()
+    parser.add_argument('database', type=str, help='Path to the SQLite3 clubs database file.')
+    args = parser.parse_args()
     current_year = datetime.now().year
 
     try:
@@ -105,7 +113,7 @@ def main():
         for year in range(FIRST_YEAR, current_year + 1):
             clubs = extract_clubs(clubs, year)
 
-        store_clubs(clubs)
+        store_clubs(args.database, clubs)
     except requests.RequestException as e:
         print(f"Erreur lors de la requête : {e}", file=sys.stderr)
 
