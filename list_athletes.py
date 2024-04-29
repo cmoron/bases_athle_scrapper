@@ -149,21 +149,28 @@ def main():
         with sqlite3.connect(args.database) as conn:
             cursor = conn.cursor()
             create_athletes_table(cursor)
-            for year in range(first_year, last_year + 1):
-                clubs = retrieve_clubs(cursor, args.club_id, year)
-                nb_clubs = len(clubs)
-                cpt = 0
+            try:
+                for year in range(first_year, last_year + 1):
+                    clubs = retrieve_clubs(cursor, args.club_id, year)
+                    nb_clubs = len(clubs)
+                    cpt = 0
 
-                for club_id in clubs:
-                    cpt += 1
-                    print(f"{cpt} / {nb_clubs} - Processing club {clubs[club_id]} for year {year}")
-                    athletes = extract_athletes_from_club(year, club_id)
-                    store_athletes(athletes, cursor)
-            conn.commit()
+                    for club_id in clubs:
+                        cpt += 1
+                        try:
+                            print(f"{cpt} / {nb_clubs} - Processing club {clubs[club_id]} for year {year}")
+                        except UnicodeEncodeError:
+                            print(f"UnicodeEncodeError for {club_id}")
+                        athletes = extract_athletes_from_club(year, club_id)
+                        store_athletes(athletes, cursor)
+            except KeyboardInterrupt:
+                print("Interrupted by user")
+            except requests.RequestException as e:
+                print(f"Error: {e}", file=sys.stderr)
+            finally:
+                conn.commit()
     except FileNotFoundError:
         print(f"Error: File {args.database} not found.", file=sys.stderr)
-    except requests.RequestException as e:
-        print(f"Error: {e}", file=sys.stderr)
     except sqlite3.Error as e:
         print(f"Error: {e}", file=sys.stderr)
 
