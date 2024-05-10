@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup
 # URL of the club
 CLUB_URL = 'https://bases.athle.fr/asp.net/liste.aspx?frmpostback=true&frmbase=resultats&frmmode=1&frmespace=0&frmsaison={year}&frmclub={club_id}&frmposition={page}'
 ATHLETE_BASE_URL = 'https://bases.athle.fr/asp.net/athletes.aspx?base=records&seq={athlete_id}'
+SESSION = requests.Session()
 
 # First year of the database
 FIRST_YEAR = 2004
@@ -49,12 +50,19 @@ def fetch_and_parse_html(url: str) -> BeautifulSoup:
         BeautifulSoup: The parsed HTML content
     """
     try:
-        response = requests.get(url, timeout=10)
+        response = SESSION.get(url, timeout=10)
         response.raise_for_status()  # Raises HTTPError for bad responses
         return BeautifulSoup(response.text, 'html.parser')
     except requests.RequestException as e:
         print(f"Error fetching {url}: {e}", file=sys.stderr)
         return None
+    # try:
+        # response = requests.get(url, timeout=10)
+        # response.raise_for_status()  # Raises HTTPError for bad responses
+        # return BeautifulSoup(response.text, 'html.parser')
+    # except requests.RequestException as e:
+        # print(f"Error fetching {url}: {e}", file=sys.stderr)
+        # return None
 
 def get_max_pages(soup: BeautifulSoup) -> int:
     """
@@ -286,11 +294,15 @@ def update_athletes_info(database):
     athletes_to_update = cursor.fetchall()
     print("Updating information for", len(athletes_to_update), "athletes")
 
+    cpt = 0
     # Utiliser ThreadPoolExecutor pour paralléliser les mises à jour
     with ThreadPoolExecutor(max_workers=10) as executor:
+        # with ThreadPoolExecutor(max_workers=1) as executor:
         future_to_id = {executor.submit(fetch_and_update_athlete, athlete_id, database): athlete_id for (athlete_id, _) in athletes_to_update}
         for future in as_completed(future_to_id):
             try:
+                cpt += 1
+                print(f"{cpt} / {len(athletes_to_update)} - Updating athlete {future_to_id[future]}")
                 future.result()  # Just to catch any exceptions that might have been thrown
             except Exception as e:
                 print(f"Failed to update athlete {future_to_id[future]}: {str(e)}")
