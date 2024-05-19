@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-List athletes from a SQLite database file containing clubs id.
+List athletes from a database containing clubs id.
 """
 
 import argparse
 from datetime import datetime
-import sqlite3
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import psycopg2
 import requests
 from bs4 import BeautifulSoup
+from db import get_db_connection, create_database
 
 # URL of the club
 CLUB_URL = 'https://bases.athle.fr/asp.net/liste.aspx?frmpostback=true&frmbase=resultats&frmmode=1&frmespace=0&frmsaison={year}&frmclub={club_id}&frmposition={page}'
@@ -52,17 +53,10 @@ def fetch_and_parse_html(url: str) -> BeautifulSoup:
     try:
         response = SESSION.get(url, timeout=10)
         response.raise_for_status()  # Raises HTTPError for bad responses
-        return BeautifulSoup(response.text, 'html.parser')
+        return BeautifulSoup(response.text, 'lxml')
     except requests.RequestException as e:
         print(f"Error fetching {url}: {e}", file=sys.stderr)
         return None
-    # try:
-        # response = requests.get(url, timeout=10)
-        # response.raise_for_status()  # Raises HTTPError for bad responses
-        # return BeautifulSoup(response.text, 'html.parser')
-    # except requests.RequestException as e:
-        # print(f"Error fetching {url}: {e}", file=sys.stderr)
-        # return None
 
 def get_max_pages(soup: BeautifulSoup) -> int:
     """
@@ -78,6 +72,27 @@ def get_max_pages(soup: BeautifulSoup) -> int:
         if select_element:
             max_pages = len(select_element.find_all('option'))
     return max_pages
+
+def athlete_exists(athlete_id: str) -> bool:
+    """
+    Check if an athlete already exists in the database.
+    Args:
+        athlete_id (str): The athlete ID
+    Returns:
+        bool: True if the athlete exists, False otherwise
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    exists = False
+    try:
+        cursor.execute('SELECT 1 FROM athletes WHERE id = %s', (athlete_id,))
+        exists = cursor.fetchone() is not None
+    except psycopg2.Error as e:
+        print(f"Error: {e}", file=sys.stderr)
+    finally:
+        cursor.close()
+        conn.close()
+    return exists
 
 def extract_athlete_data(athletes: dict, soup: BeautifulSoup) -> dict:
     """
@@ -121,7 +136,7 @@ def extract_athlete_data_parallel(athletes: dict, soup: BeautifulSoup) -> dict:
         athlete_links = soup.find_all('a', href=lambda x: x and 'javascript:bddThrowAthlete' in x)
 
         # Préparer les tâches pour chaque athlète
-        with ThreadPoolExecutor(max_workers=12) as executor:
+        with ThreadPoolExecutor(max_workers=24) as executor:
             future_to_athlete = {executor.submit(fetch_and_extract_athlete_data, link): link for link in athlete_links}
             for future in as_completed(future_to_athlete):
                 athlete_data = future.result()
@@ -140,6 +155,10 @@ def fetch_and_extract_athlete_data(link):
         dict: Extracted data for one athlete
     """
     id_athlete = link['href'].split(',')[1].strip("'").strip()
+
+    if athlete_exists(id_athlete):
+        return None
+
     name_athlete = link.get_text(strip=True)
     url = ATHLETE_BASE_URL.format(athlete_id=convert_athlete_id(id_athlete))
 
@@ -156,57 +175,90 @@ def fetch_and_extract_athlete_data(link):
         "nationality": nationality
     }
 
-def store_athletes(athletes: dict, cursor: sqlite3.Cursor):
+def store_athletes(athletes: dict):
     """
     Store the athletes in the database
     Args:
         athletes (dict): The athletes
-        cursor (sqlite3.Cursor): The cursor to execute SQL commands
     """
-    athletes_data = [
-        (athlete_id, info['name'], info['url'],
-         info['birth_date'], info['license_id'],
-         info['sexe'], info['nationality'])
+    athletes_data = [(
+        athlete_id,
+        info['name'],
+        info['url'],
+        info['birth_date'],
+        info['license_id'],
+        info['sexe'],
+        info['nationality'])
         for athlete_id, info in athletes.items()
     ]
 
-    cursor.executemany(
-        'INSERT OR IGNORE INTO athletes (id, name, url, birth_date, license_id, sexe, nationality)\
-                VALUES (?, ?, ?, ?, ?, ?, ?)',
-        athletes_data
-    )
+    conn = get_db_connection()
+    cursor = conn.cursor()
 
-def create_athletes_table(cursor: sqlite3.Cursor):
+    try:
+        cursor.executemany('''
+            INSERT INTO athletes (id, name, url, birth_date, license_id, sexe, nationality)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (id) DO NOTHING
+        ''', athletes_data)
+        conn.commit()
+    except psycopg2.Error as e:
+        print(f"Error: {e}", file=sys.stderr)
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
+
+def create_athletes_table():
     """
     Create the athletes table
-    Args:
-        cursor (sqlite3.Cursor): The cursor to execute SQL commands
     """
-    cursor.execute('CREATE TABLE IF NOT EXISTS athletes (\
-            id TEXT PRIMARY KEY,\
-            name TEXT,\
-            license_id TEXT,\
-            url TEXT,\
-            birth_date TEXT,\
-            sexe TEXT,\
-            nationality TEXT\
-            )')
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS athletes (
+                id TEXT PRIMARY KEY,
+                name TEXT,
+                license_id TEXT,
+                url TEXT,
+                birth_date TEXT,
+                sexe TEXT,
+                nationality TEXT
+            )
+        ''')
+        conn.commit()
+    except psycopg2.Error as e:
+        print(f"Error: {e}", file=sys.stderr)
+        conn.rollback()
+    finally:
+        cursor.close()
+        conn.close()
 
-def retrieve_clubs(cursor: sqlite3.Cursor, club_id: str, year: int) -> dict:
+def retrieve_clubs(club_id: str, year: int) -> dict:
     """
     Retrieve the clubs from the database only if the last year is greater or equal to the given year
     Args:
-        cursor (sqlite3.Cursor): The cursor to execute SQL commands
         club_id (str): The club ID
         year (int): The year
     Returns:
         dict: The clubs
     """
-    if club_id:
-        cursor.execute('SELECT id, name FROM clubs WHERE id = ?', (club_id,))
-    else:
-        cursor.execute('SELECT id, name FROM clubs WHERE first_year <= ? AND last_year >= ?', (year, year))
-    return dict(cursor.fetchall())
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    res = {}
+    try:
+        if club_id:
+            cursor.execute('SELECT id, name FROM clubs WHERE id = %s', (club_id,))
+        else:
+            cursor.execute('SELECT id, name FROM clubs WHERE first_year <= %s AND last_year >= %s', (year, year))
+        res = dict(cursor.fetchall())
+    except psycopg2.Error as e:
+        print(f"Error: {e}", file=sys.stderr)
+    finally:
+        cursor.close()
+        conn.close()
+    return res
 
 def extract_athletes_from_club(year: int, club_id: str) -> dict:
     """
@@ -280,13 +332,11 @@ def extract_birth_date_and_license(url: str) -> dict:
 
     return birth_date, license_number, sexe, nationality
 
-def update_athletes_info(database):
+def update_athletes_info():
     """
     Update missing information for all athletes in the database.
-    Args:
-        database (str): Path to the SQLite database file.
     """
-    conn = sqlite3.connect(database)
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     # Sélectionner tous les athlètes qui ont des informations manquantes
@@ -298,92 +348,87 @@ def update_athletes_info(database):
     # Utiliser ThreadPoolExecutor pour paralléliser les mises à jour
     with ThreadPoolExecutor(max_workers=10) as executor:
         # with ThreadPoolExecutor(max_workers=1) as executor:
-        future_to_id = {executor.submit(fetch_and_update_athlete, athlete_id, database): athlete_id for (athlete_id, _) in athletes_to_update}
+        future_to_id = {executor.submit(fetch_and_update_athlete, athlete_id): athlete_id for (athlete_id, _) in athletes_to_update}
         for future in as_completed(future_to_id):
             try:
                 cpt += 1
-                print(f"{cpt} / {len(athletes_to_update)} - Updating athlete {future_to_id[future]}")
+                print(f"{cpt} / {len(athletes_to_update)} - Updated athlete {future_to_id[future]}")
                 future.result()  # Just to catch any exceptions that might have been thrown
             except Exception as e:
                 print(f"Failed to update athlete {future_to_id[future]}: {str(e)}")
     conn.close()
 
-def fetch_and_update_athlete(athlete_id, database):
+def fetch_and_update_athlete(athlete_id):
     """
     Fetch and update athlete data for a given athlete ID.
     Args:
         athlete_id (str): The athlete ID
-        database (str): Path to the SQLite database file.
     """
     url = ATHLETE_BASE_URL.format(athlete_id=convert_athlete_id(athlete_id))
     birth_date, license_id, sexe, nationality = extract_birth_date_and_license(url)
 
     # Mettre à jour la base de données
-    conn = sqlite3.connect(database)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        UPDATE athletes SET url = ?, birth_date = ?, license_id = ?, sexe = ?, nationality = ?
-        WHERE id = ?
+        UPDATE athletes SET url = %s, birth_date = %s, license_id = %s, sexe = %s, nationality = %s
+        WHERE id = %s
     """, (url, birth_date, license_id, sexe, nationality, athlete_id))
     conn.commit()
     conn.close()
 
-def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str, database: str) -> None:
+def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) -> None:
     """
     Process the clubs and athletes
     Args:
         first_year (int): The first year
         last_year (int): The last year
         club_id (str): The club ID
-        database (str): The database file
     """
     try:
-        with sqlite3.connect(database) as conn:
-            cursor = conn.cursor()
-            create_athletes_table(cursor)
-            try:
-                for year in range(first_year, last_year + 1):
-                    clubs = retrieve_clubs(cursor, club_id, year)
-                    nb_clubs = len(clubs)
-                    cpt = 0
+        create_athletes_table()
+        for year in range(first_year, last_year + 1):
+            clubs = retrieve_clubs(club_id, year)
+            nb_clubs = len(clubs)
+            cpt = 0
 
-                    for club in clubs:
-                        cpt += 1
-                        try:
-                            print(f"{cpt} / {nb_clubs} - Processing club {clubs[club]} for year {year}")
-                        except UnicodeEncodeError:
-                            print(f"UnicodeEncodeError for {club}")
-                        athletes = extract_athletes_from_club(year, club)
-                        store_athletes(athletes, cursor)
-            except KeyboardInterrupt:
-                print("Interrupted by user")
-            except requests.RequestException as e:
-                print(f"Error: {e}", file=sys.stderr)
-            finally:
-                conn.commit()
-    except FileNotFoundError:
-        print(f"Error: File {database} not found.", file=sys.stderr)
-    except sqlite3.Error as e:
+            for club in clubs:
+                cpt += 1
+                try:
+                    print(f"{cpt} / {nb_clubs} - Processing club {clubs[club]} for year {year}")
+                except UnicodeEncodeError:
+                    print(f"UnicodeEncodeError for {club}")
+                athletes = extract_athletes_from_club(year, club)
+                store_athletes(athletes)
+    except KeyboardInterrupt:
+        print("Interrupted by user")
+    except requests.RequestException as e:
         print(f"Error: {e}", file=sys.stderr)
 
 def main():
     """
     Main function
     """
-    parser = argparse.ArgumentParser(description="List athletes from a SQLite database file containing clubs id.")
-    parser.add_argument('--first-year', type=int, default=FIRST_YEAR, help='First year of the database.')
-    parser.add_argument('--last-year', type=int, default=datetime.now().year, help='Last year of the database.')
-    parser.add_argument('--club-id', type=str, help='Club ID to extract athletes from.')
-    parser.add_argument('--update', action='store_true', help='Update missing information for all athletes')
-    parser.add_argument('database', type=str, help='Path to the SQLite3 clubs database file.')
+    parser = argparse.ArgumentParser(
+            description="List athletes from a database file containing clubs id.")
+    parser.add_argument(
+            '--first-year', type=int, default=FIRST_YEAR, help='First year of the database.')
+    parser.add_argument(
+            '--last-year', type=int, default=datetime.now().year, help='Last year of the database.')
+    parser.add_argument(
+            '--club-id', type=str, help='Club ID to extract athletes from.')
+    parser.add_argument(
+            '--update', action='store_true', help='Update missing information for all athletes')
     args = parser.parse_args()
     first_year = args.first_year
     last_year = args.last_year
 
+    create_database()
+
     if args.update:
-        update_athletes_info(args.database)
+        update_athletes_info()
     else:
-        process_clubs_and_athletes(first_year, last_year, args.club_id, args.database)
+        process_clubs_and_athletes(first_year, last_year, args.club_id)
 
 if __name__ == '__main__':
     main()
