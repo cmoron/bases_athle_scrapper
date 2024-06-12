@@ -274,10 +274,11 @@ def extract_athletes_from_club(year: int, club_id: str) -> dict:
     soup = fetch_and_parse_html(url)
     if soup:
         max_pages = get_max_pages(soup)
+        nb_workers = max(1, max_pages)
         urls = [generate_club_url(year, club_id, page) for page in range(max_pages)]
 
         # Création d'un pool de threads pour gérer les requêtes en parallèle
-        with ThreadPoolExecutor(max_workers=max_pages) as executor:
+        with ThreadPoolExecutor(max_workers=nb_workers) as executor:
             future_to_url = {executor.submit(fetch_and_parse_html, paginate_url): paginate_url for paginate_url in urls}
             for future in as_completed(future_to_url):
                 url = future_to_url[future]
