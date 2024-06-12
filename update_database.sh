@@ -6,15 +6,16 @@ CURRENT_YEAR="$(date +"%Y")"
 
 # Exécuter les scripts de mise à jour
 cd "${SCRIPTS_DIR}"
-./list-clubs.py
+source "venv/bin/activate"
+./list_clubs.py
 if [ $? -ne 0 ]; then
-    echo "Échec de l'exécution de list-clubs.py"
+    echo "Échec de l'exécution de list_clubs.py"
     exit 1
 fi
 
-./list-athletes.py --first-year "${CURRENT_YEAR}"
+./list_athletes.py --first-year "${CURRENT_YEAR}"
 if [ $? -ne 0 ]; then
-    echo "Échec de l'exécution de list-athletes.py"
+    echo "Échec de l'exécution de list_athletes.py"
     exit 1
 fi
 
