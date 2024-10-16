@@ -208,6 +208,8 @@ def store_athletes(athletes: dict):
     finally:
         cursor.close()
         conn.close()
+        with open('log.txt', 'a', encoding='utf-8') as f:
+            f.write(f"{datetime.now()} - {len(athletes)} athletes stored\n")
 
 def create_athletes_table():
     """
