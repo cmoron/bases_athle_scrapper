@@ -1,15 +1,22 @@
 # Athletics Data Extraction
 
-Ce projet contient deux scripts Python qui extraient des informations sur les clubs et les athlètes d'athlétisme depuis le site de la Fédération Française d'Athlétisme et les stockent dans une base de données SQLite.
+Ce projet contient deux scripts Python qui extraient des informations sur les clubs et les athlètes d'athlétisme depuis le site de la Fédération Française d'Athlétisme et les stockent dans une base de données PostgreSQL.
 
 ## Structure du Projet
 
-- `list_clubs.py` : Script pour extraire les informations des clubs d'athlétisme et les stocker dans une base de données SQLite.
-- `list_athletes.py` : Script pour extraire les informations des athlètes à partir des clubs enregistrés et les stocker également dans la base de données SQLite.
+- `list_clubs.py` : Script pour extraire les informations des clubs d'athlétisme et les stocker dans une base de données PostgreSQL.
+- `list_athletes.py` : Script pour extraire les informations des athlètes à partir des clubs enregistrés et les stocker également dans la base de données PostgreSQL.
 
 ## Prérequis
 
-Pour exécuter ces scripts, vous aurez besoin de Python 3.x et des dépendances listées dans le fichier `requirements.txt`.
+Pour exécuter ces scripts, vous aurez besoin de Python 3.x, d'une instance PostgreSQL en fonctionnement et des dépendances listées dans le fichier `requirements.txt`. Les paramètres de connexion à PostgreSQL doivent être définis dans un fichier `.env` :
+
+```
+POSTGRES_DEFAULT_DB=postgres
+POSTGRES_DB=athle
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+```
 
 ## Installation
 
@@ -31,16 +38,16 @@ python list_clubs.py
 
 ### Extraction des Athlètes
 
-Avant d'exécuter le script d'extraction des athlètes, assurez-vous que la base de données contenant les clubs est disponible et correctement remplie. Ensuite, exécutez :
+Avant d'exécuter le script d'extraction des athlètes, assurez-vous que la base de données contenant les clubs est disponible et correctement remplie. Ensuite, exécutez :
 
 ```bash
-python list_athletes.py path_to_your_clubs_database.db
+python list_athletes.py
 ```
 
 ## Fonctionnalités
 
 - Extraction automatique des données des clubs et des athlètes pour différentes années.
-- Stockage des données dans des bases de données SQLite locales pour un accès facile et rapide.
+- Stockage des données dans une base de données PostgreSQL pour un accès facile et rapide.
 - Gestion des erreurs de réseau pour garantir la robustesse des scripts.
 
 ## Contribution
