@@ -3,3 +3,4 @@ beautifulsoup4>=4.9.3
 python-dotenv
 lxml
 psycopg2-binary
+pytest
