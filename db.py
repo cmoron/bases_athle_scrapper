@@ -1,5 +1,5 @@
 """
-This module contains functions to connect to the database
+This module contains functions to connect to the PostgreSQL database.
 """
 
 import os
@@ -12,10 +12,10 @@ load_dotenv()
 
 def get_db_connection(dbname=None):
     """
-    Create a connection to the database
+    Create a connection to the PostgreSQL database
 
     Returns:
-        psycopg2.connection: Connection to the database
+        psycopg2.connection: Connection to the PostgreSQL database
     """
     db_connection = {
         'dbname': dbname or os.getenv('POSTGRES_DB'),

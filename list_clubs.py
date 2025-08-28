@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-Récupère les données des clubs d'athlétisme pour une année donnée
+Récupère les données des clubs d'athlétisme pour une année donnée et les stocke dans une base de données PostgreSQL.
 """
 
 import argparse
 from datetime import datetime
 import re
-import sqlite3
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
@@ -149,7 +148,7 @@ def extract_clubs(clubs: dict, year: int) -> dict:
 
 def store_clubs(clubs: dict):
     """
-    Stocke les clubs dans une base de données
+    Stocke les clubs dans une base de données PostgreSQL.
 
     Args:
         clubs (dict): Dictionnaire des clubs
