@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-List athletes from a database containing clubs id.
+List athletes from a PostgreSQL database containing club IDs and store them in the same database.
 """
 
 import argparse
@@ -75,7 +75,7 @@ def get_max_pages(soup: BeautifulSoup) -> int:
 
 def athlete_exists(athlete_id: str) -> bool:
     """
-    Check if an athlete already exists in the database.
+    Check if an athlete already exists in the PostgreSQL database.
     Args:
         athlete_id (str): The athlete ID
     Returns:
@@ -177,7 +177,7 @@ def fetch_and_extract_athlete_data(link):
 
 def store_athletes(athletes: dict):
     """
-    Store the athletes in the database
+    Store the athletes in the PostgreSQL database
     Args:
         athletes (dict): The athletes
     """
@@ -213,7 +213,7 @@ def store_athletes(athletes: dict):
 
 def create_athletes_table():
     """
-    Create the athletes table
+    Create the athletes table in the PostgreSQL database
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -239,7 +239,7 @@ def create_athletes_table():
 
 def retrieve_clubs(club_id: str, year: int) -> dict:
     """
-    Retrieve the clubs from the database only if the last year is greater or equal to the given year
+    Retrieve the clubs from the PostgreSQL database only if the last year is greater or equal to the given year
     Args:
         club_id (str): The club ID
         year (int): The year
@@ -337,7 +337,7 @@ def extract_birth_date_and_license(url: str) -> dict:
 
 def update_athletes_info():
     """
-    Update missing information for all athletes in the database.
+    Update missing information for all athletes in the PostgreSQL database.
     """
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -363,7 +363,7 @@ def update_athletes_info():
 
 def fetch_and_update_athlete(athlete_id):
     """
-    Fetch and update athlete data for a given athlete ID.
+    Fetch and update athlete data for a given athlete ID in the PostgreSQL database.
     Args:
         athlete_id (str): The athlete ID
     """
@@ -382,7 +382,7 @@ def fetch_and_update_athlete(athlete_id):
 
 def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) -> None:
     """
-    Process the clubs and athletes
+    Process the clubs and athletes and store them in the PostgreSQL database
     Args:
         first_year (int): The first year
         last_year (int): The last year
@@ -413,7 +413,7 @@ def main():
     Main function
     """
     parser = argparse.ArgumentParser(
-            description="List athletes from a database file containing clubs id.")
+            description="List athletes from a PostgreSQL database containing club IDs.")
     parser.add_argument(
             '--first-year', type=int, default=FIRST_YEAR, help='First year of the database.')
     parser.add_argument(

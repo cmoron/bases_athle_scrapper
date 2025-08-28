@@ -1,4 +1,6 @@
-"""Utility functions to connect to the database."""
+"""
+This module contains functions to connect to the PostgreSQL database.
+"""
 
 import os
 import sqlite3
@@ -42,7 +44,6 @@ class SQLiteConnectionWrapper:
 
 # Load environment variables
 load_dotenv()
-
 
 def get_db_connection(dbname: str | None = None, dsn: str | None = None):
     """Create a connection to the database.
