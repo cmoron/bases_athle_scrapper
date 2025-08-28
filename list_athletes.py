@@ -7,10 +7,13 @@ import argparse
 from datetime import datetime
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 import psycopg2
 import requests
 from bs4 import BeautifulSoup
 from db import get_db_connection, create_database
+
+logging.basicConfig(filename="update.log", level=logging.INFO)
 
 # URL of the club
 CLUB_URL = 'https://bases.athle.fr/asp.net/liste.aspx?frmpostback=true&frmbase=resultats&frmmode=1&frmespace=0&frmsaison={year}&frmclub={club_id}&frmposition={page}'
@@ -19,6 +22,8 @@ SESSION = requests.Session()
 
 # First year of the database
 FIRST_YEAR = 2004
+
+total_athletes = 0
 
 def convert_athlete_id(athlete_id: str) -> str:
     """
@@ -55,8 +60,8 @@ def fetch_and_parse_html(url: str) -> BeautifulSoup:
         response.raise_for_status()  # Raises HTTPError for bad responses
         return BeautifulSoup(response.text, 'lxml')
     except requests.RequestException as e:
-        print(f"Error fetching {url}: {e}", file=sys.stderr)
-        return None
+        logging.error("Error fetching %s: %s", url, e)
+        raise
 
 def get_max_pages(soup: BeautifulSoup) -> int:
     """
@@ -88,7 +93,8 @@ def athlete_exists(athlete_id: str) -> bool:
         cursor.execute('SELECT 1 FROM athletes WHERE id = %s', (athlete_id,))
         exists = cursor.fetchone() is not None
     except psycopg2.Error as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logging.error("Error: %s", e)
+        raise
     finally:
         cursor.close()
         conn.close()
@@ -181,6 +187,7 @@ def store_athletes(athletes: dict):
     Args:
         athletes (dict): The athletes
     """
+    global total_athletes
     athletes_data = [(
         athlete_id,
         info['name'],
@@ -202,9 +209,11 @@ def store_athletes(athletes: dict):
             ON CONFLICT (id) DO NOTHING
         ''', athletes_data)
         conn.commit()
+        total_athletes += len(athletes)
     except psycopg2.Error as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logging.error("Error: %s", e)
         conn.rollback()
+        raise
     finally:
         cursor.close()
         conn.close()
@@ -231,8 +240,9 @@ def create_athletes_table():
         ''')
         conn.commit()
     except psycopg2.Error as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logging.error("Error: %s", e)
         conn.rollback()
+        raise
     finally:
         cursor.close()
         conn.close()
@@ -256,7 +266,8 @@ def retrieve_clubs(club_id: str, year: int) -> dict:
             cursor.execute('SELECT id, name FROM clubs WHERE first_year <= %s AND last_year >= %s', (year, year))
         res = dict(cursor.fetchall())
     except psycopg2.Error as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logging.error("Error: %s", e)
+        raise
     finally:
         cursor.close()
         conn.close()
@@ -289,7 +300,8 @@ def extract_athletes_from_club(year: int, club_id: str) -> dict:
                     if page_soup:
                         athletes.update(extract_athlete_data_parallel({}, page_soup))
                 except Exception as e:
-                    print(f"Error processing {url}: {e}", file=sys.stderr)
+                    logging.error("Error processing %s: %s", url, e)
+                    raise
     return athletes
 
 def extract_birth_date_and_license(url: str) -> dict:
@@ -345,7 +357,7 @@ def update_athletes_info():
     # Sélectionner tous les athlètes qui ont des informations manquantes
     cursor.execute("SELECT id, url FROM athletes WHERE url IS NULL OR url = ''")
     athletes_to_update = cursor.fetchall()
-    print("Updating information for", len(athletes_to_update), "athletes")
+    logging.info("Updating information for %s athletes", len(athletes_to_update))
 
     cpt = 0
     # Utiliser ThreadPoolExecutor pour paralléliser les mises à jour
@@ -355,10 +367,11 @@ def update_athletes_info():
         for future in as_completed(future_to_id):
             try:
                 cpt += 1
-                print(f"{cpt} / {len(athletes_to_update)} - Updated athlete {future_to_id[future]}")
+                logging.info("%s / %s - Updated athlete %s", cpt, len(athletes_to_update), future_to_id[future])
                 future.result()  # Just to catch any exceptions that might have been thrown
             except Exception as e:
-                print(f"Failed to update athlete {future_to_id[future]}: {str(e)}")
+                logging.error("Failed to update athlete %s: %s", future_to_id[future], str(e))
+                raise
     conn.close()
 
 def fetch_and_update_athlete(athlete_id):
@@ -398,15 +411,18 @@ def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) ->
             for club in clubs:
                 cpt += 1
                 try:
-                    print(f"{cpt} / {nb_clubs} - Processing club {clubs[club]} for year {year}")
+                    logging.info("%s / %s - Processing club %s for year %s", cpt, nb_clubs, clubs[club], year)
                 except UnicodeEncodeError:
-                    print(f"UnicodeEncodeError for {club}")
+                    logging.error("UnicodeEncodeError for %s", club)
+                    raise
                 athletes = extract_athletes_from_club(year, club)
                 store_athletes(athletes)
     except KeyboardInterrupt:
-        print("Interrupted by user")
+        logging.error("Interrupted by user")
+        raise
     except requests.RequestException as e:
-        print(f"Error: {e}", file=sys.stderr)
+        logging.error("Error: %s", e)
+        raise
 
 def main():
     """
@@ -426,12 +442,15 @@ def main():
     first_year = args.first_year
     last_year = args.last_year
 
+    logging.info("Start scrapping")
+
     create_database()
 
     if args.update:
         update_athletes_info()
     else:
         process_clubs_and_athletes(first_year, last_year, args.club_id)
+        logging.info("Scrapping terminé : %s athlètes", total_athletes)
 
 if __name__ == '__main__':
     main()
