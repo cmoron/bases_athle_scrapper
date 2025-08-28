@@ -6,8 +6,8 @@ Récupère les données des clubs d'athlétisme pour une année donnée et les s
 import argparse
 from datetime import datetime
 import re
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 import requests
 from bs4 import BeautifulSoup
 from db import get_db_connection, create_database
@@ -16,6 +16,11 @@ from db import get_db_connection, create_database
 FIRST_YEAR = 2004
 BASES_ATHLE_URL = 'https://bases.athle.fr'
 SESSION = requests.Session()
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 def get_max_club_pages(year: int) -> int:
     """
@@ -52,7 +57,7 @@ def fetch_club_page(url: str) -> BeautifulSoup:
         response.raise_for_status()
         return BeautifulSoup(response.text, 'html.parser')
     except requests.RequestException as e:
-        print(f"Error fetching {url}: {e}", file=sys.stderr)
+        logging.error("Error fetching %s: %s", url, e)
         return None
 
 def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
@@ -103,7 +108,7 @@ def extract_clubs(clubs: dict, year: int) -> dict:
                         else:
                             clubs[club_id] = (club_name, min(clubs[club_id][1], year), max(clubs[club_id][2], year))
             except Exception as e:
-                print(f"Error processing URL {future_to_url[future]}: {e}", file=sys.stderr)
+                logging.error("Error processing URL %s: %s", future_to_url[future], e)
 
     return clubs
 
@@ -190,6 +195,8 @@ def main():
     parser.parse_args()
     current_year = datetime.now().year
 
+    logging.info("Début de l'extraction des clubs")
+
     try:
         create_database()
 
@@ -198,9 +205,11 @@ def main():
         for year in range(FIRST_YEAR, current_year + 1):
             clubs = extract_clubs(clubs, year)
 
+        logging.info("Extraction terminée : %s clubs", len(clubs))
+
         store_clubs(clubs)
     except requests.RequestException as e:
-        print(f"Erreur lors de la requête : {e}", file=sys.stderr)
+        logging.error("Erreur lors de la requête : %s", e)
 
 if __name__ == '__main__':
     main()
