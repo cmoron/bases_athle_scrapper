@@ -14,7 +14,7 @@ from db import get_db_connection, create_database
 
 # URL de la base de données des clubs d'athlétisme
 FIRST_YEAR = 2004
-BASES_ATHLE_URL = 'https://bases.athle.fr'
+BASES_ATHLE_URL = 'https://www.athle.fr/bases/'
 SESSION = requests.Session()
 
 logging.basicConfig(
@@ -32,15 +32,16 @@ def get_max_club_pages(year: int) -> int:
         int: Nombre de pages de clubs
     """
     max_pages = 0
-    club_base_url = BASES_ATHLE_URL + f'/asp.net/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmposition='
-    response = SESSION.get(club_base_url, timeout=5)
+    club_base_url = BASES_ATHLE_URL + f'/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmsexe=&frmligue=&frmdepartement=&frmnclub=&frmruptures='
+
+    response = SESSION.get(club_base_url, timeout=10)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, 'html.parser')
-    select_element = soup.find('select', class_='barSelect')
+    select_element = soup.find('div', id='optionsPagination')
 
     if select_element:
-        max_pages = len(select_element.find_all('option'))
+        max_pages = len(select_element.find_all('div', class_='select-option'))
 
     return max_pages
 
@@ -68,19 +69,32 @@ def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
     Returns:
         dict: Dictionary of clubs
     """
-    clubs = {}
-    club_link_elements = soup.find_all('td', class_=re.compile(r'datas1[01]'))
-    for club_link_element in club_link_elements:
-        club_link = club_link_element.find('a')
-        if club_link:
-            club_name = club_link.text.strip().rstrip('*').strip()
-            url = club_link['href']
-            match = re.search(r'&frmnclub=(\d+)&', url)
-            if match:
-                club_id = match.group(1)
-                if club_id not in clubs:
-                    clubs[club_id] = club_name
+    tbody = soup.find("tbody", class_="text-blue-primary") or soup
+
+    clubs: dict[str, str] = {}
+
+    # Les lignes utiles ont exactement 7 <td> au niveau racine (pas les detail-row).
+    for tr in tbody.find_all("tr"):
+        tds = tr.find_all("td", recursive=False)
+        if len(tds) != 7:
+            continue
+
+        name_td = tds[2]  # colonne "Club" (contient un <a>)
+        id_td = tds[3]    # colonne "N°Club"
+
+        a = name_td.find("a")
+        if not a:
+            continue
+
+        club_name = " ".join(a.get_text(strip=True).split())
+        club_name = re.sub(r"\*+$", "", club_name).strip()  # retire les astérisques finaux
+        club_id = id_td.get_text(strip=True)
+
+        if club_id and club_name:
+            clubs[club_id] = club_name
+
     return clubs
+
 
 def extract_clubs(clubs: dict, year: int) -> dict:
     """
@@ -92,7 +106,7 @@ def extract_clubs(clubs: dict, year: int) -> dict:
               et leur nom et année comme valeur
     """
     max_club_pages = get_max_club_pages(year)
-    club_base_url = BASES_ATHLE_URL + f'/asp.net/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmposition='
+    club_base_url = BASES_ATHLE_URL + f'/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmsexe=&frmligue=&frmdepartement=&frmnclub=&frmruptures=&frmposition='
     urls = [club_base_url + str(page) for page in range(max_club_pages)]
 
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -111,45 +125,6 @@ def extract_clubs(clubs: dict, year: int) -> dict:
                 logging.error("Error processing URL %s: %s", future_to_url[future], e)
 
     return clubs
-
-
-# def extract_clubs(clubs: dict, year: int) -> dict:
-    # """
-    # Récupère les clubs d'athlétisme pour une année donnée
-
-    # Args:
-        # year (int): Année pour laquelle récupérer les données
-
-    # Returns:
-        # dict: Dictionnaire des clubs d'athlétisme avec leur ID comme clé
-              # et leur nom et année comme valeur
-    # """
-    # max_club_pages = get_max_club_pages(year)
-    # club_base_url = BASES_ATHLE_URL + f'/asp.net/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmposition='
-
-    # for page in range(max_club_pages):
-        # url = club_base_url + str(page)
-        # response = requests.get(url, timeout=5)
-        # response.raise_for_status()
-
-        # html_content = response.text
-        # soup = BeautifulSoup(html_content, 'html.parser')
-        # club_link_elements = soup.find_all('td', class_=re.compile(r'datas1[01]'))
-
-        # for club_link_element in club_link_elements:
-            # club_link = club_link_element.find('a')
-            # if club_link:
-                # club_name = club_link.text.strip().rstrip('*').strip()
-                # url= club_link['href']
-                # match = re.search(r'&frmnclub=(\d+)&', url)
-                # if match:
-                    # club_id = match.group(1)
-                    # if club_id not in clubs:
-                        # clubs[club_id] = (club_name, year, year)
-                    # else:
-                        # clubs[club_id] = (club_name, min(clubs[club_id][1], year), max(clubs[club_id][2], year))
-
-    # return clubs
 
 def store_clubs(clubs: dict):
     """
