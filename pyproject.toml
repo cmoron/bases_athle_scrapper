@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bases-athle-scraper"
+version = "0.1.0"
+description = "Utilities to scrape athletics club and athlete data."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.26.0",
+    "beautifulsoup4>=4.9.3",
+    "python-dotenv",
+    "lxml",
+    "psycopg2-binary",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+scrape-clubs = "bases_athle_scraper.cli.clubs:main"
+scrape-athletes = "bases_athle_scraper.cli.athletes:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

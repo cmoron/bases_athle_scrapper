@@ -15,7 +15,7 @@ fi
 echo "$(date) - Début de la mise à jour (saison $SEASON)"
 echo "🚀 Mise à jour de la base athlé - Saison ${SEASON}"
 echo "📥 Mise à jour des clubs..."
-if python list_clubs.py; then
+if python scripts/scrape_clubs.py; then
     echo "$(date) - Mise à jour des clubs réussie"
 else
     echo "$(date) - Échec de la mise à jour des clubs"
@@ -23,7 +23,7 @@ else
 fi
 
 echo "🏃 Mise à jour des athlètes pour la saison ${SEASON}..."
-if athletes=$(python list_athletes.py --first-year "${SEASON}"); then
+if athletes=$(python scripts/scrape_athletes.py --first-year "${SEASON}"); then
     echo "$(date) - Athlètes retournés : $athletes"
     echo "$(date) - Mise à jour des athlètes réussie"
 else

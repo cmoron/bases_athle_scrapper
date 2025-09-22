@@ -1,15 +1,21 @@
 # Athletics Data Extraction
 
-Ce projet contient deux scripts Python qui extraient des informations sur les clubs et les athlètes d'athlétisme depuis le site de la Fédération Française d'Athlétisme et les stockent dans une base de données PostgreSQL.
+Ce projet fournit un package Python installable qui extrait des informations sur les clubs et les athlètes d'athlétisme depuis le site de la Fédération Française d'Athlétisme et les stocke dans une base de données.
 
-## Structure du Projet
+## Structure du projet
 
-- `list_clubs.py` : Script pour extraire les informations des clubs d'athlétisme et les stocker dans une base de données PostgreSQL.
-- `list_athletes.py` : Script pour extraire les informations des athlètes à partir des clubs enregistrés et les stocker également dans la base de données PostgreSQL.
+Le code source est organisé dans un package `bases_athle_scraper` disponible sous `src/` :
+
+- `database.py` : utilitaires de connexion à la base de données (PostgreSQL ou SQLite pour les tests).
+- `clubs.py` : fonctions pour collecter et stocker les clubs.
+- `athletes.py` : fonctions pour extraire et persister les athlètes.
+- `cli/` : points d'entrée en ligne de commande légers.
+
+Des scripts prêts à l'emploi sont également fournis dans le dossier `scripts/`.
 
 ## Prérequis
 
-Pour exécuter ces scripts, vous aurez besoin de Python 3.x, d'une instance PostgreSQL en fonctionnement et des dépendances listées dans le fichier `requirements.txt`. Les paramètres de connexion à PostgreSQL doivent être définis dans un fichier `.env` :
+Vous aurez besoin de Python 3.10+ et d'une base PostgreSQL opérationnelle. Les variables suivantes peuvent être définies dans un fichier `.env` (chargé automatiquement) :
 
 ```
 POSTGRES_DEFAULT_DB=postgres
@@ -20,35 +26,42 @@ POSTGRES_PASSWORD=postgres
 
 ## Installation
 
-1. Clonez le dépôt GitHub ou téléchargez les fichiers du projet.
-2. Installez les dépendances nécessaires :
-   ```bash
-   pip install -r requirements.txt
-   ```
+Installez le package et ses dépendances en mode développement :
+
+```bash
+pip install -e .
+```
+
+Les dépendances sont également listées dans `requirements.txt` si vous préférez une installation classique.
 
 ## Utilisation
 
-### Extraction des Clubs
-
-Pour lancer l'extraction des clubs :
+### Depuis les scripts fournis
 
 ```bash
-python list_clubs.py
+# Extraction des clubs (toutes les saisons connues)
+python scripts/scrape_clubs.py
+
+# Extraction des athlètes (toutes les saisons, tous les clubs)
+python scripts/scrape_athletes.py
 ```
 
-### Extraction des Athlètes
-
-Avant d'exécuter le script d'extraction des athlètes, assurez-vous que la base de données contenant les clubs est disponible et correctement remplie. Ensuite, exécutez :
+Chaque script accepte des options supplémentaires, par exemple :
 
 ```bash
-python list_athletes.py
+python scripts/scrape_clubs.py --first-year 2015 --last-year 2024
+python scripts/scrape_athletes.py --club-id CLUB123 --update
 ```
+
+### Après installation
+
+L'installation via `pip install -e .` enregistre également deux exécutables `scrape-clubs` et `scrape-athletes` accessibles directement depuis votre shell.
 
 ## Fonctionnalités
 
 - Extraction automatique des données des clubs et des athlètes pour différentes années.
-- Stockage des données dans une base de données PostgreSQL pour un accès facile et rapide.
-- Gestion des erreurs de réseau pour garantir la robustesse des scripts.
+- Stockage des données dans une base de données PostgreSQL (ou SQLite pour les tests).
+- Gestion des erreurs de réseau et journalisation cohérente.
 
 ## Contribution
 

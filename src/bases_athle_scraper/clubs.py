@@ -1,26 +1,20 @@
-#!/usr/bin/env python3
-"""
-Récupère les données des clubs d'athlétisme pour une année donnée et les stocke dans une base de données PostgreSQL.
-"""
+"""Utilities to fetch and persist athletics clubs from bases.athle."""
 
-import argparse
 from datetime import datetime
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import requests
 from bs4 import BeautifulSoup
-from db import get_db_connection, create_database
+
+from .database import get_db_connection
 
 # URL de la base de données des clubs d'athlétisme
 FIRST_YEAR = 2004
 BASES_ATHLE_URL = 'https://www.athle.fr/bases/'
 SESSION = requests.Session()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logger = logging.getLogger(__name__)
 
 def get_max_club_pages(year: int) -> int:
     """
@@ -58,7 +52,7 @@ def fetch_club_page(url: str) -> BeautifulSoup:
         response.raise_for_status()
         return BeautifulSoup(response.text, 'html.parser')
     except requests.RequestException as e:
-        logging.error("Error fetching %s: %s", url, e)
+        logger.error("Error fetching %s: %s", url, e)
         return None
 
 def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
@@ -93,6 +87,22 @@ def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
         if club_id and club_name:
             clubs[club_id] = club_name
 
+    if clubs:
+        return clubs
+
+    # Fallback parsing for simplified layouts (mainly used in tests)
+    for link in soup.find_all("a", href=lambda href: href and "frmnclub=" in href):
+        match = re.search(r"frmnclub=([^&]+)", link["href"])
+        if not match:
+            continue
+
+        club_id = match.group(1)
+        club_name = " ".join(link.get_text(strip=True).split())
+        club_name = re.sub(r"\*+$", "", club_name).strip()
+
+        if club_id and club_name:
+            clubs[club_id] = club_name
+
     return clubs
 
 
@@ -120,9 +130,13 @@ def extract_clubs(clubs: dict, year: int) -> dict:
                         if club_id not in clubs:
                             clubs[club_id] = (club_name, year, year)
                         else:
-                            clubs[club_id] = (club_name, min(clubs[club_id][1], year), max(clubs[club_id][2], year))
+                            clubs[club_id] = (
+                                club_name,
+                                min(clubs[club_id][1], year),
+                                max(clubs[club_id][2], year),
+                            )
             except Exception as e:
-                logging.error("Error processing URL %s: %s", future_to_url[future], e)
+                logger.error("Error processing URL %s: %s", future_to_url[future], e)
 
     return clubs
 
@@ -161,30 +175,31 @@ def store_clubs(clubs: dict):
     cursor.close()
     conn.close()
 
-def main():
+
+def collect_clubs(first_year: int = FIRST_YEAR, last_year: int | None = None) -> dict:
+    """Collect club information for a range of seasons.
+
+    Args:
+        first_year: First season to collect. Defaults to ``FIRST_YEAR``.
+        last_year: Optional last season. Defaults to current year when omitted.
+
+    Returns:
+        A dictionary keyed by club identifier. Each value is a tuple containing
+        the name of the club and the first/last season it appears in the data.
     """
-    Fonction principale
-    """
-    parser = argparse.ArgumentParser(
-        description="Récupère les données des clubs d'athlétisme FFA sur bases.athle")
-    parser.parse_args()
-    current_year = datetime.now().year
 
-    logging.info("Début de l'extraction des clubs")
+    final_year = last_year or datetime.now().year
+    clubs: dict[str, tuple[str, int, int]] = {}
+    for year in range(first_year, final_year + 1):
+        logger.info("Collecting clubs for season %s", year)
+        clubs = extract_clubs(clubs, year)
+    logger.info("Collected %s clubs between %s and %s", len(clubs), first_year, final_year)
+    return clubs
 
-    try:
-        create_database()
 
-        # for each year from FIRST_YEAR to current year
-        clubs = {}
-        for year in range(FIRST_YEAR, current_year + 1):
-            clubs = extract_clubs(clubs, year)
+def sync_clubs(first_year: int = FIRST_YEAR, last_year: int | None = None) -> dict:
+    """Collect clubs for the given range and persist them to the database."""
 
-        logging.info("Extraction terminée : %s clubs", len(clubs))
-
-        store_clubs(clubs)
-    except requests.RequestException as e:
-        logging.error("Erreur lors de la requête : %s", e)
-
-if __name__ == '__main__':
-    main()
+    clubs = collect_clubs(first_year=first_year, last_year=last_year)
+    store_clubs(clubs)
+    return clubs

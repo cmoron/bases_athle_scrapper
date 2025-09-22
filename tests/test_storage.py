@@ -5,12 +5,13 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
-from db import get_db_connection
-from list_clubs import store_clubs
-from list_athletes import store_athletes, create_athletes_table
+from bases_athle_scraper.athletes import create_athletes_table, store_athletes
+from bases_athle_scraper.clubs import store_clubs
+from bases_athle_scraper.database import get_db_connection
 
 
 @pytest.fixture

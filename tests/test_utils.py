@@ -2,10 +2,13 @@ import os
 import sys
 import pytest
 
-# Ensure the project root is on the Python path to allow module imports
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+# Ensure the src directory is on the Python path to allow module imports
+ROOT = os.path.dirname(os.path.dirname(__file__))
+SRC = os.path.join(ROOT, "src")
+if SRC not in sys.path:
+    sys.path.append(SRC)
 
-from list_athletes import convert_athlete_id, generate_club_url
+from bases_athle_scraper.athletes import convert_athlete_id, generate_club_url
 
 
 @pytest.mark.parametrize(

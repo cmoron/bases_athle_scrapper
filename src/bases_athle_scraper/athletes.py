@@ -1,19 +1,15 @@
-#!/usr/bin/env python3
-"""
-List athletes from a PostgreSQL database containing club IDs and store them in the same database.
-"""
+"""Business logic used to retrieve and persist athletes."""
 
-import argparse
 from datetime import datetime
-import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import logging
 import psycopg2
 import requests
 from bs4 import BeautifulSoup
-from db import get_db_connection, create_database
 
-logging.basicConfig(filename="update.log", level=logging.INFO)
+from .database import get_db_connection
+
+logger = logging.getLogger(__name__)
 
 # URL of the club
 CLUB_URL = 'https://bases.athle.fr/asp.net/liste.aspx?frmpostback=true&frmbase=resultats&frmmode=1&frmespace=0&frmsaison={year}&frmclub={club_id}&frmposition={page}'
@@ -60,7 +56,7 @@ def fetch_and_parse_html(url: str) -> BeautifulSoup:
         response.raise_for_status()  # Raises HTTPError for bad responses
         return BeautifulSoup(response.text, 'lxml')
     except requests.RequestException as e:
-        logging.error("Error fetching %s: %s", url, e)
+        logger.error("Error fetching %s: %s", url, e)
         raise
 
 def get_max_pages(soup: BeautifulSoup) -> int:
@@ -93,7 +89,7 @@ def athlete_exists(athlete_id: str) -> bool:
         cursor.execute('SELECT 1 FROM athletes WHERE id = %s', (athlete_id,))
         exists = cursor.fetchone() is not None
     except psycopg2.Error as e:
-        logging.error("Error: %s", e)
+        logger.error("Error: %s", e)
         raise
     finally:
         cursor.close()
@@ -211,7 +207,7 @@ def store_athletes(athletes: dict):
         conn.commit()
         total_athletes += len(athletes)
     except psycopg2.Error as e:
-        logging.error("Error: %s", e)
+        logger.error("Error: %s", e)
         conn.rollback()
         raise
     finally:
@@ -240,7 +236,7 @@ def create_athletes_table():
         ''')
         conn.commit()
     except psycopg2.Error as e:
-        logging.error("Error: %s", e)
+        logger.error("Error: %s", e)
         conn.rollback()
         raise
     finally:
@@ -266,7 +262,7 @@ def retrieve_clubs(club_id: str, year: int) -> dict:
             cursor.execute('SELECT id, name FROM clubs WHERE first_year <= %s AND last_year >= %s', (year, year))
         res = dict(cursor.fetchall())
     except psycopg2.Error as e:
-        logging.error("Error: %s", e)
+        logger.error("Error: %s", e)
         raise
     finally:
         cursor.close()
@@ -300,7 +296,7 @@ def extract_athletes_from_club(year: int, club_id: str) -> dict:
                     if page_soup:
                         athletes.update(extract_athlete_data_parallel({}, page_soup))
                 except Exception as e:
-                    logging.error("Error processing %s: %s", url, e)
+                    logger.error("Error processing %s: %s", url, e)
                     raise
     return athletes
 
@@ -357,7 +353,7 @@ def update_athletes_info():
     # Sélectionner tous les athlètes qui ont des informations manquantes
     cursor.execute("SELECT id, url FROM athletes WHERE url IS NULL OR url = ''")
     athletes_to_update = cursor.fetchall()
-    logging.info("Updating information for %s athletes", len(athletes_to_update))
+    logger.info("Updating information for %s athletes", len(athletes_to_update))
 
     cpt = 0
     # Utiliser ThreadPoolExecutor pour paralléliser les mises à jour
@@ -367,10 +363,10 @@ def update_athletes_info():
         for future in as_completed(future_to_id):
             try:
                 cpt += 1
-                logging.info("%s / %s - Updated athlete %s", cpt, len(athletes_to_update), future_to_id[future])
+                logger.info("%s / %s - Updated athlete %s", cpt, len(athletes_to_update), future_to_id[future])
                 future.result()  # Just to catch any exceptions that might have been thrown
             except Exception as e:
-                logging.error("Failed to update athlete %s: %s", future_to_id[future], str(e))
+                logger.error("Failed to update athlete %s: %s", future_to_id[future], str(e))
                 raise
     conn.close()
 
@@ -393,7 +389,11 @@ def fetch_and_update_athlete(athlete_id):
     conn.commit()
     conn.close()
 
-def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) -> None:
+def process_clubs_and_athletes(
+    first_year: int,
+    last_year: int,
+    club_id: str | None,
+) -> None:
     """
     Process the clubs and athletes and store them in the PostgreSQL database
     Args:
@@ -411,46 +411,49 @@ def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) ->
             for club in clubs:
                 cpt += 1
                 try:
-                    logging.info("%s / %s - Processing club %s for year %s", cpt, nb_clubs, clubs[club], year)
+                    logger.info("%s / %s - Processing club %s for year %s", cpt, nb_clubs, clubs[club], year)
                 except UnicodeEncodeError:
-                    logging.error("UnicodeEncodeError for %s", club)
+                    logger.error("UnicodeEncodeError for %s", club)
                     raise
                 athletes = extract_athletes_from_club(year, club)
                 store_athletes(athletes)
     except KeyboardInterrupt:
-        logging.error("Interrupted by user")
+        logger.error("Interrupted by user")
         raise
     except requests.RequestException as e:
-        logging.error("Error: %s", e)
+        logger.error("Error: %s", e)
         raise
 
-def main():
+def scrape_athletes(
+    first_year: int = FIRST_YEAR,
+    last_year: int | None = None,
+    club_id: str | None = None,
+    update: bool = False,
+) -> None:
+    """Collect athletes for the requested range of seasons and clubs.
+
+    Args:
+        first_year: First season to fetch. Defaults to ``FIRST_YEAR``.
+        last_year: Optional last season. Defaults to current year.
+        club_id: Optional club identifier to restrict the scrape.
+        update: When ``True`` only update missing information for existing athletes.
     """
-    Main function
-    """
-    parser = argparse.ArgumentParser(
-            description="List athletes from a PostgreSQL database containing club IDs.")
-    parser.add_argument(
-            '--first-year', type=int, default=FIRST_YEAR, help='First year of the database.')
-    parser.add_argument(
-            '--last-year', type=int, default=datetime.now().year, help='Last year of the database.')
-    parser.add_argument(
-            '--club-id', type=str, help='Club ID to extract athletes from.')
-    parser.add_argument(
-            '--update', action='store_true', help='Update missing information for all athletes')
-    args = parser.parse_args()
-    first_year = args.first_year
-    last_year = args.last_year
 
-    logging.info("Start scrapping")
+    final_year = last_year or datetime.now().year
 
-    create_database()
-
-    if args.update:
+    if update:
+        logger.info("Updating athlete information")
         update_athletes_info()
-    else:
-        process_clubs_and_athletes(first_year, last_year, args.club_id)
-        logging.info("Scrapping terminé : %s athlètes", total_athletes)
+        return
 
-if __name__ == '__main__':
-    main()
+    global total_athletes
+    total_athletes = 0
+
+    logger.info(
+        "Start scraping athletes from %s to %s%s",
+        first_year,
+        final_year,
+        f" for club {club_id}" if club_id else "",
+    )
+    process_clubs_and_athletes(first_year, final_year, club_id)
+    logger.info("Scraping terminé : %s athlètes", total_athletes)
