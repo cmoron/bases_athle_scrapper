@@ -1,16 +1,10 @@
-import os
-import sys
 from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
-from db import get_db_connection
-from list_clubs import store_clubs
-from list_athletes import store_athletes, create_athletes_table
+from bases_athle_scrapper.athletes import create_athletes_table, store_athletes
+from bases_athle_scrapper.clubs import store_clubs
+from bases_athle_scrapper.database import get_db_connection
 
 
 @pytest.fixture

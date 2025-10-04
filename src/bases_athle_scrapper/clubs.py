@@ -1,16 +1,16 @@
-#!/usr/bin/env python3
-"""
-Récupère les données des clubs d'athlétisme pour une année donnée et les stocke dans une base de données PostgreSQL.
-"""
+"""Utilities to fetch and persist club information."""
 
-import argparse
-from datetime import datetime
+from __future__ import annotations
+
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict
+
 import requests
 from bs4 import BeautifulSoup
-from common_config import get_logger, setup_logging
-from db import get_db_connection, create_database
+
+from .database import get_db_connection
+from .logging_config import get_logger
 
 # URL de la base de données des clubs d'athlétisme
 FIRST_YEAR = 2004
@@ -58,7 +58,7 @@ def fetch_club_page(url: str) -> BeautifulSoup:
         logger.error("Error fetching %s: %s", url, e)
         return None
 
-def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
+def extract_clubs_from_page(soup: BeautifulSoup) -> Dict[str, str]:
     """
     Extract clubs from a BeautifulSoup object
     Args:
@@ -93,7 +93,7 @@ def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
     return clubs
 
 
-def extract_clubs(clubs: dict, year: int) -> dict:
+def extract_clubs(clubs: Dict[str, tuple[str, int, int]], year: int) -> Dict[str, tuple[str, int, int]]:
     """
     Récupère les clubs d'athlétisme pour une année donnée
     Args:
@@ -124,7 +124,7 @@ def extract_clubs(clubs: dict, year: int) -> dict:
 
     return clubs
 
-def store_clubs(clubs: dict):
+def store_clubs(clubs: Dict[str, tuple[str, int, int]]) -> None:
     """
     Stocke les clubs dans une base de données PostgreSQL.
 
@@ -135,58 +135,29 @@ def store_clubs(clubs: dict):
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute('''
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS clubs (
             id TEXT PRIMARY KEY,
             name TEXT,
             first_year INTEGER DEFAULT 0,
             last_year INTEGER DEFAULT 0
         )
-    ''')
+        """
+    )
 
     for club_id, club in clubs.items():
-        name = club[0]
-        first_year = club[1]
-        last_year = club[2]
+        name, first_year, last_year = club
 
-        cursor.execute('''
+        cursor.execute(
+            """
             INSERT INTO clubs (id, name, first_year, last_year)
             VALUES (%s, %s, %s, %s)
             ON CONFLICT (id) DO NOTHING
-        ''', (club_id, name, first_year, last_year))
+            """,
+            (club_id, name, first_year, last_year),
+        )
 
     conn.commit()
     cursor.close()
     conn.close()
-
-def main():
-    """
-    Fonction principale
-    """
-    parser = argparse.ArgumentParser(
-        description="Récupère les données des clubs d'athlétisme FFA sur bases.athle")
-    parser.add_argument("--first-year", type=int, default=FIRST_YEAR,
-        help=f"Année de départ pour l'extraction (défaut : {FIRST_YEAR})"
-    )
-    args = parser.parse_args()
-    current_year = datetime.now().year
-
-    logger.info("Début de l'extraction des clubs")
-
-    try:
-        create_database()
-
-        # for each year from FIRST_YEAR to current year
-        clubs = {}
-        for year in range(args.first_year, current_year + 1):
-            clubs = extract_clubs(clubs, year)
-
-        logger.info("Extraction terminée : %s clubs", len(clubs))
-
-        store_clubs(clubs)
-    except requests.RequestException as e:
-        logger.error("Erreur lors de la requête : %s", e)
-
-if __name__ == '__main__':
-    setup_logging()
-    main()

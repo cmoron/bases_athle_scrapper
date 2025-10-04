@@ -1,11 +1,6 @@
-import os
-import sys
 import pytest
 
-# Ensure the project root is on the Python path to allow module imports
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-
-from list_athletes import convert_athlete_id, generate_club_url
+from bases_athle_scrapper.athletes import convert_athlete_id, generate_club_url
 
 @pytest.mark.parametrize(
     "athlete_id, expected",

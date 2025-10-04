@@ -1,11 +1,12 @@
 # Athletics Data Extraction
 
-Ce projet contient deux scripts Python qui extraient des informations sur les clubs et les athlètes d'athlétisme depuis le site de la Fédération Française d'Athlétisme et les stockent dans une base de données PostgreSQL.
+Ce projet expose un package Python dédié à l'extraction des informations sur les clubs et les athlètes d'athlétisme depuis le site de la Fédération Française d'Athlétisme et au stockage de ces données dans une base de données PostgreSQL.
 
 ## Structure du Projet
 
-- `list_clubs.py` : Script pour extraire les informations des clubs d'athlétisme et les stocker dans une base de données PostgreSQL.
-- `list_athletes.py` : Script pour extraire les informations des athlètes à partir des clubs enregistrés et les stocker également dans la base de données PostgreSQL.
+- `src/bases_athle_scrapper/` : Package Python contenant la logique métier (scraping, accès base de données, configuration du logging).
+- `src/bases_athle_scrapper/cli/` : Interfaces en ligne de commande basées sur le package.
+- `tests/` : Suite de tests unitaires pour vérifier le comportement du package.
 
 ## Prérequis
 
@@ -25,6 +26,10 @@ POSTGRES_PASSWORD=postgres
    ```bash
    pip install -r requirements.txt
    ```
+3. (Optionnel) installez le package en mode développement pour faciliter l'exécution des commandes :
+   ```bash
+   pip install -e .
+   ```
 
 ## Utilisation
 
@@ -33,7 +38,7 @@ POSTGRES_PASSWORD=postgres
 Pour lancer l'extraction des clubs :
 
 ```bash
-python list_clubs.py
+python -m bases_athle_scrapper.cli.clubs
 ```
 
 ### Extraction des Athlètes
@@ -41,7 +46,7 @@ python list_clubs.py
 Avant d'exécuter le script d'extraction des athlètes, assurez-vous que la base de données contenant les clubs est disponible et correctement remplie. Ensuite, exécutez :
 
 ```bash
-python list_athletes.py
+python -m bases_athle_scrapper.cli.athletes
 ```
 
 ## Fonctionnalités

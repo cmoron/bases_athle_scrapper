@@ -1,30 +1,28 @@
-#!/usr/bin/env python3
-"""
-List athletes from a PostgreSQL database containing club IDs and store them in the same database.
-"""
+"""Utilities to scrape and persist athlete information."""
 
-import argparse
-from datetime import datetime
-import sys
+from __future__ import annotations
+
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from typing import Dict, Optional
+
 import psycopg2
 import requests
 from bs4 import BeautifulSoup
-from common_config import get_logger, setup_logging
-from db import get_db_connection, create_database, DatabaseConnectionError
+from requests.adapters import HTTPAdapter
+
+from .database import get_db_connection
+from .logging_config import get_logger
 
 logger = get_logger(__name__)
 
 # URL of the club
-CLUB_URL = 'https://www.athle.fr/bases/liste.aspx?frmbase=cclubs&frmmode=2&frmespace=&frmtypeclub=M&frmsaison={year}&frmnclub={club_id}&frmposition={page}'
-ATHLETE_BASE_URL = 'https://www.athle.fr/athletes/{athlete_id}'
+CLUB_URL = "https://www.athle.fr/bases/liste.aspx?frmbase=cclubs&frmmode=2&frmespace=&frmtypeclub=M&frmsaison={year}&frmnclub={club_id}&frmposition={page}"
+ATHLETE_BASE_URL = "https://www.athle.fr/athletes/{athlete_id}"
+
 SESSION = requests.Session()
-adapter = HTTPAdapter = requests.adapters.HTTPAdapter(
-    pool_connections=24,
-    pool_maxsize=24,
-)
-SESSION.mount('https://', adapter)
+SESSION.mount("https://", HTTPAdapter(pool_connections=24, pool_maxsize=24))
 
 # First year of the database
 FIRST_YEAR = 2004
@@ -119,7 +117,7 @@ def athlete_exists(athlete_id: str) -> bool:
         conn.close()
     return exists
 
-def extract_athlete_data(athletes: dict, soup: BeautifulSoup) -> dict:
+def extract_athlete_data(athletes: Dict[str, dict], soup: BeautifulSoup) -> Dict[str, dict]:
     """
     Extract athlete data from a BeautifulSoup object
     Args:
@@ -148,7 +146,9 @@ def extract_athlete_data(athletes: dict, soup: BeautifulSoup) -> dict:
                         }
     return athletes
 
-def extract_athlete_data_parallel(athletes: dict, soup: BeautifulSoup) -> dict:
+def extract_athlete_data_parallel(
+    athletes: Dict[str, dict], soup: BeautifulSoup
+) -> Dict[str, dict]:
     """
     Extract athlete data from a BeautifulSoup object using parallel requests
     Args:
@@ -203,7 +203,7 @@ def fetch_and_extract_athlete_data(link):
         "nationality": nationality
     }
 
-def store_athletes(athletes: dict):
+def store_athletes(athletes: Dict[str, dict]) -> None:
     """
     Store the athletes in the PostgreSQL database
     Args:
@@ -240,10 +240,10 @@ def store_athletes(athletes: dict):
     finally:
         cursor.close()
         conn.close()
-        with open('log.txt', 'a', encoding='utf-8') as f:
-            f.write(f"{datetime.now()} - {len(athletes)} athletes stored\n")
+        with open("log.txt", "a", encoding="utf-8") as file:
+            file.write(f"{datetime.now()} - {len(athletes)} athletes stored\n")
 
-def create_athletes_table():
+def create_athletes_table() -> None:
     """
     Create the athletes table in the PostgreSQL database
     """
@@ -270,7 +270,7 @@ def create_athletes_table():
         cursor.close()
         conn.close()
 
-def retrieve_clubs(club_id: str, year: int) -> dict:
+def retrieve_clubs(club_id: Optional[str], year: int) -> Dict[str, str]:
     """
     Retrieve the clubs from the PostgreSQL database only if the last year is greater or equal to the given year
     Args:
@@ -296,7 +296,7 @@ def retrieve_clubs(club_id: str, year: int) -> dict:
         conn.close()
     return res
 
-def extract_athletes_from_club(year: int, club_id: str) -> dict:
+def extract_athletes_from_club(year: int, club_id: str) -> Dict[str, dict]:
     """
     Extract athletes from a club
     Args:
@@ -312,7 +312,9 @@ def extract_athletes_from_club(year: int, club_id: str) -> dict:
         return extract_athlete_data_parallel(athletes, soup)
     return athletes
 
-def extract_birth_date_and_license(url: str) -> dict:
+def extract_birth_date_and_license(
+    url: str,
+) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
     """
     Extract birth date and license number from the athlete's page
     Args:
@@ -366,7 +368,7 @@ def extract_birth_date_and_license(url: str) -> dict:
 
     return birth_date, license_number, sexe, nationality
 
-def update_athletes_info():
+def update_athletes_info() -> None:
     """
     Update missing information for all athletes in the PostgreSQL database.
     """
@@ -393,7 +395,7 @@ def update_athletes_info():
                 raise
     conn.close()
 
-def fetch_and_update_athlete(athlete_id):
+def fetch_and_update_athlete(athlete_id: str) -> None:
     """
     Fetch and update athlete data for a given athlete ID in the PostgreSQL database.
     Args:
@@ -412,7 +414,9 @@ def fetch_and_update_athlete(athlete_id):
     conn.commit()
     conn.close()
 
-def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) -> None:
+def process_clubs_and_athletes(
+    first_year: int, last_year: int, club_id: Optional[str]
+) -> None:
     """
     Process the clubs and athletes and store them in the PostgreSQL database
     Args:
@@ -441,43 +445,6 @@ def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) ->
     except KeyboardInterrupt:
         logger.error("Interrupted by user")
         raise
-    except requests.RequestException as e:
-        logger.error("Error: %s", e)
+    except requests.RequestException as exc:
+        logger.error("Error: %s", exc)
         raise
-
-def main():
-    """
-    Main function
-    """
-    parser = argparse.ArgumentParser(
-            description="List athletes from a PostgreSQL database containing club IDs.")
-    parser.add_argument(
-            '--first-year', type=int, default=FIRST_YEAR, help='First year of the database.')
-    parser.add_argument(
-            '--last-year', type=int, default=datetime.now().year, help='Last year of the database.')
-    parser.add_argument(
-            '--club-id', type=str, help='Club ID to extract athletes from.')
-    parser.add_argument(
-            '--update', action='store_true', help='Update missing information for all athletes')
-    args = parser.parse_args()
-    first_year = args.first_year
-    last_year = args.last_year
-
-    logger.info("Start scrapping")
-
-    try:
-        create_database()
-    except DatabaseConnectionError as e:
-        logger.error(str(e))
-        sys.exit(1)
-
-    if args.update:
-        update_athletes_info()
-    else:
-        process_clubs_and_athletes(first_year, last_year, args.club_id)
-        logger.info("Scrapping terminé : %s athlètes", total_athletes)
-
-if __name__ == '__main__':
-    setup_logging()
-    logger.info("Script started with args: %s", ' '.join(sys.argv))
-    main()
