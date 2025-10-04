@@ -6,21 +6,18 @@ List athletes from a PostgreSQL database containing club IDs and store them in t
 import argparse
 from datetime import datetime
 import sys
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from common_config import get_logger, setup_logging
 import psycopg2
 import requests
 from bs4 import BeautifulSoup
-from db import get_db_connection, create_database
-from pprint import pprint
-import re
+from common_config import get_logger, setup_logging
+from db import get_db_connection, create_database, DatabaseConnectionError
 
 logger = get_logger(__name__)
 
 # URL of the club
-# CLUB_URL = 'https://bases.athle.fr/asp.net/liste.aspx?frmpostback=true&frmbase=resultats&frmmode=1&frmespace=0&frmsaison={year}&frmclub={club_id}&frmposition={page}'
 CLUB_URL = 'https://www.athle.fr/bases/liste.aspx?frmbase=cclubs&frmmode=2&frmespace=&frmtypeclub=M&frmsaison={year}&frmnclub={club_id}&frmposition={page}'
-# ATHLETE_BASE_URL = 'https://bases.athle.fr/asp.net/athletes.aspx?base=records&seq={athlete_id}'
 ATHLETE_BASE_URL = 'https://www.athle.fr/athletes/{athlete_id}'
 SESSION = requests.Session()
 adapter = HTTPAdapter = requests.adapters.HTTPAdapter(
@@ -56,21 +53,34 @@ def generate_club_url(year: int, club_id: str, page: int = 0) -> str:
     """
     return CLUB_URL.format(year=year, club_id=club_id, page=page)
 
-def fetch_and_parse_html(url: str) -> BeautifulSoup:
+def fetch_and_parse_html(url: str, max_retries: int = 3) -> BeautifulSoup | None:
     """
-    Fetch and parse the HTML content of a URL
+    Fetch and parse the HTML content of a URL with retry logic
     Args:
         url (str): The URL to fetch
+        max_retries (int): Maximum number of retry attempts
     Returns:
-        BeautifulSoup: The parsed HTML content
+        BeautifulSoup: The parsed HTML content, or None if all retries failed
     """
-    try:
-        response = SESSION.get(url, timeout=20)
-        response.raise_for_status()  # Raises HTTPError for bad responses
-        return BeautifulSoup(response.text, 'lxml')
-    except requests.RequestException as e:
-        logger.error("Error fetching %s: %s", url, e)
-        raise
+    for attempt in range(max_retries):
+        try:
+            response = SESSION.get(url, timeout=20)
+            response.raise_for_status()
+            return BeautifulSoup(response.text, 'lxml')
+        except requests.Timeout:
+            logger.warning("Timeout fetching %s (attempt %d/%d)", url, attempt + 1, max_retries)
+            if attempt == max_retries - 1:
+                logger.error("Failed to fetch %s after %d attempts (timeout)", url, max_retries)
+                return None
+        except requests.HTTPError as e:
+            logger.error("HTTP error fetching %s: %s", url, e)
+            return None
+        except requests.RequestException as e:
+            logger.warning("Error fetching %s: %s (attempt %d/%d)", url, e, attempt + 1, max_retries)
+            if attempt == max_retries - 1:
+                logger.error("Failed to fetch %s after %d attempts", url, max_retries)
+                return None
+    return None
 
 def get_max_pages(soup: BeautifulSoup) -> int:
     """
@@ -299,26 +309,7 @@ def extract_athletes_from_club(year: int, club_id: str) -> dict:
     url = generate_club_url(year, club_id)
     soup = fetch_and_parse_html(url)
     if soup:
-
         return extract_athlete_data_parallel(athletes, soup)
-
-        # max_pages = get_max_pages(soup)
-        # nb_workers = max(1, max_pages)
-        # urls = [generate_club_url(year, club_id, page) for page in range(max_pages)]
-        # pprint(urls)
-
-        # # Création d'un pool de threads pour gérer les requêtes en parallèle
-        # with ThreadPoolExecutor(max_workers=nb_workers) as executor:
-            # future_to_url = {executor.submit(fetch_and_parse_html, paginate_url): paginate_url for paginate_url in urls}
-            # for future in as_completed(future_to_url):
-                # url = future_to_url[future]
-                # try:
-                    # page_soup = future.result()
-                    # if page_soup:
-                        # athletes.update(extract_athlete_data_parallel({}, page_soup))
-                # except Exception as e:
-                    # logger.error("Error processing %s: %s", url, e)
-                    # raise
     return athletes
 
 def extract_birth_date_and_license(url: str) -> dict:
@@ -338,7 +329,9 @@ def extract_birth_date_and_license(url: str) -> dict:
     soup = fetch_and_parse_html(url)
 
     # Normaliser tous les <p class="text-white"> en une liste de lignes lisibles
-    lines = [p.get_text(" ", strip=True) for p in soup.select("p.text-white")]
+    lines = []
+    if soup:
+        lines = [p.get_text(" ", strip=True) for p in soup.select("p.text-white")]
 
     for line in lines:
         # Année de naissance: "Né(e) en : 2004"
@@ -472,7 +465,11 @@ def main():
 
     logger.info("Start scrapping")
 
-    create_database()
+    try:
+        create_database()
+    except DatabaseConnectionError as e:
+        logger.error(str(e))
+        sys.exit(1)
 
     if args.update:
         update_athletes_info()

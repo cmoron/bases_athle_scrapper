@@ -7,9 +7,9 @@ import argparse
 from datetime import datetime
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from common_config import get_logger, setup_logging
 import requests
 from bs4 import BeautifulSoup
+from common_config import get_logger, setup_logging
 from db import get_db_connection, create_database
 
 # URL de la base de données des clubs d'athlétisme
@@ -31,7 +31,7 @@ def get_max_club_pages(year: int) -> int:
     max_pages = 0
     club_base_url = BASES_ATHLE_URL + f'/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmsexe=&frmligue=&frmdepartement=&frmnclub=&frmruptures='
 
-    response = SESSION.get(club_base_url, timeout=10)
+    response = SESSION.get(club_base_url, timeout=20)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -51,7 +51,7 @@ def fetch_club_page(url: str) -> BeautifulSoup:
         BeautifulSoup: The parsed HTML content
     """
     try:
-        response = SESSION.get(url, timeout=10)
+        response = SESSION.get(url, timeout=20)
         response.raise_for_status()
         return BeautifulSoup(response.text, 'html.parser')
     except requests.RequestException as e:
@@ -119,8 +119,8 @@ def extract_clubs(clubs: dict, year: int) -> dict:
                         else:
                             clubs[club_id] = (club_name, min(clubs[club_id][1], year), max(clubs[club_id][2], year))
                         logger.debug("Fetched club %s: %s", club_id, clubs[club_id])
-            except Exception as e:
-                logger.error("Error processing URL %s: %s", future_to_url[future], e)
+            except requests.RequestException as e:
+                logger.error("Request error for URL %s: %s", future_to_url[future], e)
 
     return clubs
 
