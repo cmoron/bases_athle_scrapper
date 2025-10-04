@@ -16,35 +16,28 @@ def test_extract_clubs_from_page():
     clubs = list_clubs.extract_clubs_from_page(soup)
     assert clubs == {"1234": "Club Name", "5678": "Second Club"}
 
-def test_extract_athlete_data(monkeypatch):
+def test_extract_athlete_data_parallel(monkeypatch):
     html = (FIXTURES / "club_athletes.html").read_text()
     soup = BeautifulSoup(html, "html.parser")
 
     def fake_extract(url):
-        return "01/01/1990", "LIC123", "M", "FRA"
+        return "2004", "2387169", "F", "FRA"
 
     monkeypatch.setattr(list_athletes, "extract_birth_date_and_license", fake_extract)
-    athletes = list_athletes.extract_athlete_data({}, soup)
+    athletes = list_athletes.extract_athlete_data_parallel({}, soup)
+    from pprint import pprint
+    pprint(athletes)
     expected_url = list_athletes.ATHLETE_BASE_URL.format(
-        athlete_id=list_athletes.convert_athlete_id("5678")
+        athlete_id="974476"
     )
     assert athletes == {
-        "5678": {
-            "name": "John Doe",
+        "974476": {
+            "id": "974476",
+            "name": "DOE Jane",
             "url": expected_url,
-            "birth_date": "01/01/1990",
-            "license_id": "LIC123",
-            "sexe": "M",
-            "nationality": "FRA",
-        },
-        "91011": {
-            "name": "Jane Roe",
-            "url": list_athletes.ATHLETE_BASE_URL.format(
-                athlete_id=list_athletes.convert_athlete_id("91011")
-            ),
-            "birth_date": "01/01/1990",
-            "license_id": "LIC123",
-            "sexe": "M",
+            "birth_date": "2004",
+            "license_id": "2387169",
+            "sexe": "F",
             "nationality": "FRA",
         },
     }
@@ -58,7 +51,7 @@ def test_extract_birth_date_and_license(monkeypatch):
 
     monkeypatch.setattr(list_athletes, "fetch_and_parse_html", fake_fetch)
     birth_date, license_id, sexe, nationality = list_athletes.extract_birth_date_and_license("dummy")
-    assert birth_date == "01/01/1990"
-    assert license_id == "LIC123"
-    assert sexe == "M"
+    assert birth_date == "2004"
+    assert license_id == "2387169"
+    assert sexe == "F"
     assert nationality == "FRA"

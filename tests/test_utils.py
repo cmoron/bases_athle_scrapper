@@ -7,7 +7,6 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from list_athletes import convert_athlete_id, generate_club_url
 
-
 @pytest.mark.parametrize(
     "athlete_id, expected",
     [
@@ -26,7 +25,7 @@ def test_generate_club_url_default_page():
     url = generate_club_url(2024, "CLUB42")
     assert (
         url
-        == "https://bases.athle.fr/asp.net/liste.aspx?frmpostback=true&frmbase=resultats&frmmode=1&frmespace=0&frmsaison=2024&frmclub=CLUB42&frmposition=0"
+        == "https://www.athle.fr/bases/liste.aspx?frmbase=cclubs&frmmode=2&frmespace=&frmtypeclub=M&frmsaison=2024&frmnclub=CLUB42&frmposition=0"
     )
 
 
@@ -35,5 +34,5 @@ def test_generate_club_url_custom_page():
     url = generate_club_url(2023, "CLUB42", page=5)
     assert (
         url
-        == "https://bases.athle.fr/asp.net/liste.aspx?frmpostback=true&frmbase=resultats&frmmode=1&frmespace=0&frmsaison=2023&frmclub=CLUB42&frmposition=5"
+        == "https://www.athle.fr/bases/liste.aspx?frmbase=cclubs&frmmode=2&frmespace=&frmtypeclub=M&frmsaison=2023&frmnclub=CLUB42&frmposition=5"
     )

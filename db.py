@@ -4,12 +4,13 @@ This module contains functions to connect to the PostgreSQL database.
 
 import os
 import sqlite3
+from common_config import get_logger, setup_logging
 from urllib.parse import urlparse
-
 from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
+logger = get_logger(__name__)
 
 class SQLiteCursorWrapper:
     """Minimal wrapper translating psycopg2 style placeholders for sqlite."""
@@ -95,9 +96,9 @@ def create_database():
     if not exists:
         # Créer la base de données
         cursor.execute(f'CREATE DATABASE {dbname}')
-        print(f"Base de données '{dbname}' créée avec succès.")
+        logger.info("Base de données '%s' créée avec succès.", dbname)
     else:
-        print(f"Base de données '{dbname}' existe déjà.")
+        logger.info("Base de données '%s' existe déjà.", dbname)
 
     cursor.close()
     conn.close()

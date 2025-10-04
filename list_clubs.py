@@ -7,7 +7,7 @@ import argparse
 from datetime import datetime
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import logging
+from common_config import get_logger, setup_logging
 import requests
 from bs4 import BeautifulSoup
 from db import get_db_connection, create_database
@@ -17,10 +17,7 @@ FIRST_YEAR = 2004
 BASES_ATHLE_URL = 'https://www.athle.fr/bases/'
 SESSION = requests.Session()
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logger = get_logger(__name__)
 
 def get_max_club_pages(year: int) -> int:
     """
@@ -58,7 +55,7 @@ def fetch_club_page(url: str) -> BeautifulSoup:
         response.raise_for_status()
         return BeautifulSoup(response.text, 'html.parser')
     except requests.RequestException as e:
-        logging.error("Error fetching %s: %s", url, e)
+        logger.error("Error fetching %s: %s", url, e)
         return None
 
 def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
@@ -121,8 +118,9 @@ def extract_clubs(clubs: dict, year: int) -> dict:
                             clubs[club_id] = (club_name, year, year)
                         else:
                             clubs[club_id] = (club_name, min(clubs[club_id][1], year), max(clubs[club_id][2], year))
+                        logger.debug("Fetched club %s: %s", club_id, clubs[club_id])
             except Exception as e:
-                logging.error("Error processing URL %s: %s", future_to_url[future], e)
+                logger.error("Error processing URL %s: %s", future_to_url[future], e)
 
     return clubs
 
@@ -167,24 +165,28 @@ def main():
     """
     parser = argparse.ArgumentParser(
         description="Récupère les données des clubs d'athlétisme FFA sur bases.athle")
-    parser.parse_args()
+    parser.add_argument("--first-year", type=int, default=FIRST_YEAR,
+        help=f"Année de départ pour l'extraction (défaut : {FIRST_YEAR})"
+    )
+    args = parser.parse_args()
     current_year = datetime.now().year
 
-    logging.info("Début de l'extraction des clubs")
+    logger.info("Début de l'extraction des clubs")
 
     try:
         create_database()
 
         # for each year from FIRST_YEAR to current year
         clubs = {}
-        for year in range(FIRST_YEAR, current_year + 1):
+        for year in range(args.first_year, current_year + 1):
             clubs = extract_clubs(clubs, year)
 
-        logging.info("Extraction terminée : %s clubs", len(clubs))
+        logger.info("Extraction terminée : %s clubs", len(clubs))
 
         store_clubs(clubs)
     except requests.RequestException as e:
-        logging.error("Erreur lors de la requête : %s", e)
+        logger.error("Erreur lors de la requête : %s", e)
 
 if __name__ == '__main__':
+    setup_logging()
     main()

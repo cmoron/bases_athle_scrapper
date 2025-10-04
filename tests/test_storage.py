@@ -25,7 +25,6 @@ def db_dsn(tmp_path, monkeypatch):
     if log.exists():
         log.unlink()
 
-
 def test_store_clubs(db_dsn):
     clubs = {
         "1": ("Club One", 2000, 2001),
@@ -41,7 +40,6 @@ def test_store_clubs(db_dsn):
         ("1", "Club One", 2000, 2001),
         ("2", "Club Two", 2002, 2003),
     ]
-
 
 def test_store_athletes(db_dsn):
     create_athletes_table()
