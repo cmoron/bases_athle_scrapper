@@ -152,7 +152,7 @@ def store_clubs(clubs: dict):
         cursor.execute('''
             INSERT INTO clubs (id, name, first_year, last_year)
             VALUES (%s, %s, %s, %s)
-            ON CONFLICT (id) DO NOTHING
+            ON CONFLICT (id) DO UPDATE SET last_year = EXCLUDED.last_year
         ''', (club_id, name, first_year, last_year))
 
     conn.commit()
