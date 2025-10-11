@@ -169,7 +169,11 @@ def main():
         help=f"Année de départ pour l'extraction (défaut : {FIRST_YEAR})"
     )
     args = parser.parse_args()
-    current_year = datetime.now().year
+
+
+    # Calcul de la saison actuelle : si on est à partir de septembre, on prend année+1
+    now = datetime.now()
+    current_season = now.year + 1 if now.month >= 9 else now.year
 
     logger.info("Début de l'extraction des clubs")
 
@@ -178,7 +182,7 @@ def main():
 
         # for each year from FIRST_YEAR to current year
         clubs = {}
-        for year in range(args.first_year, current_year + 1):
+        for year in range(args.first_year, current_season + 1):
             clubs = extract_clubs(clubs, year)
 
         logger.info("Extraction terminée : %s clubs", len(clubs))

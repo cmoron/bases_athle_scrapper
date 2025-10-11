@@ -461,7 +461,7 @@ def main():
             '--update', action='store_true', help='Update missing information for all athletes')
     args = parser.parse_args()
     first_year = args.first_year
-    last_year = args.last_year
+    last_year = max(first_year, args.last_year)
 
     logger.info("Start scrapping")
 
