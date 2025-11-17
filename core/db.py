@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from psycopg2 import OperationalError, sql
-from common_config import get_logger
+from .config import get_logger
 
 logger = get_logger(__name__)
 load_dotenv()

@@ -1,8 +1,12 @@
 #!/bin/bash
+#
+# Script de mise à jour de la base de données Bases Athlé
+# Mise à jour automatique des clubs et athlètes pour la saison en cours
+#
 
-LOG_FILE="update.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
+set -e  # Arrêter en cas d'erreur
 
+# Déterminer la saison en cours (septembre = début nouvelle saison)
 CURRENT_YEAR="$(date +"%Y")"
 CURRENT_MONTH="$(date +"%m")"
 
@@ -12,24 +16,41 @@ else
     SEASON="$CURRENT_YEAR"
 fi
 
-echo "$(date) - Début de la mise à jour (saison $SEASON)"
-echo "🚀 Mise à jour de la base athlé - Saison ${SEASON}"
+echo "================================================================================"
+echo "🚀 Mise à jour de la base Athlé - Saison ${SEASON}"
+echo "================================================================================"
+echo ""
+
+# Vérifier que Python est disponible
+if ! command -v python3 &> /dev/null; then
+    echo "❌ Erreur: python3 n'est pas installé"
+    exit 1
+fi
+
+# Mise à jour des clubs
 echo "📥 Mise à jour des clubs..."
-
-if python list_clubs.py --first-year "${SEASON}"; then
-    echo "$(date) - Mise à jour des clubs réussie"
+if python3 -m scraper.list_clubs --first-year "${SEASON}"; then
+    echo "✅ Mise à jour des clubs réussie"
 else
-    echo "$(date) - Échec de la mise à jour des clubs"
+    echo "❌ Échec de la mise à jour des clubs"
     exit 1
 fi
+echo ""
 
+# Mise à jour des athlètes
 echo "🏃 Mise à jour des athlètes pour la saison ${SEASON}..."
-if python list_athletes.py --first-year "${SEASON}"; then
-    echo "$(date) - Mise à jour des athlètes réussie"
+if python3 -m scraper.list_athletes --first-year "${SEASON}"; then
+    echo "✅ Mise à jour des athlètes réussie"
 else
-    echo "$(date) - Échec de la mise à jour des athlètes"
+    echo "❌ Échec de la mise à jour des athlètes"
     exit 1
 fi
+echo ""
 
+echo "================================================================================"
 echo "✅ Mise à jour terminée avec succès !"
-echo "$(date) - Fin de la mise à jour"
+echo "================================================================================"
+echo ""
+echo "📊 Pour voir les statistiques, lancez:"
+echo "   python3 -m tools.analyze_database"
+echo ""

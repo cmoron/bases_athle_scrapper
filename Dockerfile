@@ -9,4 +9,4 @@ COPY . .
 
 ENV PYTHONUNBUFFERED=1
 
-ENTRYPOINT ["./update_database.sh"]
+ENTRYPOINT ["./populate_database.sh"]

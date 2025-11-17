@@ -5,19 +5,7 @@ import pytest
 # Ensure the project root is on the Python path to allow module imports
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from list_athletes import convert_athlete_id, generate_club_url
-
-@pytest.mark.parametrize(
-    "athlete_id, expected",
-    [
-        ("1234", "5049495048514752"),
-        ("ABCD", "3465336632673168"),
-        ("7", "4455"),
-    ],
-)
-def test_convert_athlete_id(athlete_id, expected):
-    """Ensure convert_athlete_id returns the expected encoded string."""
-    assert convert_athlete_id(athlete_id) == expected
+from scraper.list_athletes import generate_club_url
 
 
 def test_generate_club_url_default_page():

@@ -11,8 +11,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import psycopg2
 import requests
 from bs4 import BeautifulSoup
-from common_config import get_logger, setup_logging
-from db import get_db_connection, create_database, DatabaseConnectionError
+from core.config import get_logger, setup_logging
+from core.db import get_db_connection, create_database, DatabaseConnectionError
 
 logger = get_logger(__name__)
 
@@ -30,16 +30,6 @@ SESSION.mount('https://', adapter)
 FIRST_YEAR = 2004
 
 total_athletes = 0
-
-def convert_athlete_id(athlete_id: str) -> str:
-    """
-    Convert the athlete ID to a string used into athlete URL
-    Args:
-        athlete_id (str): The athlete ID
-    Returns:
-        str: The athlete ID as a string
-    """
-    return ''.join(f"{99 - ord(c)}{ord(c)}" for c in str(athlete_id))
 
 def generate_club_url(year: int, club_id: str, page: int = 0) -> str:
     """
@@ -97,11 +87,11 @@ def get_max_pages(soup: BeautifulSoup) -> int:
             max_pages = len(select_element.find_all('option'))
     return max_pages
 
-def athlete_exists(athlete_id: str) -> bool:
+def athlete_exists(athlete_ffa_id: str) -> bool:
     """
     Check if an athlete already exists in the PostgreSQL database.
     Args:
-        athlete_id (str): The athlete ID
+        athlete_ffa_id (str): The FFA ID of the athlete
     Returns:
         bool: True if the athlete exists, False otherwise
     """
@@ -109,7 +99,7 @@ def athlete_exists(athlete_id: str) -> bool:
     cursor = conn.cursor()
     exists = False
     try:
-        cursor.execute('SELECT 1 FROM athletes WHERE id = %s', (athlete_id,))
+        cursor.execute('SELECT 1 FROM athletes WHERE ffa_id = %s', (athlete_ffa_id,))
         exists = cursor.fetchone() is not None
     except psycopg2.Error as e:
         logger.error("Error: %s", e)
@@ -118,6 +108,37 @@ def athlete_exists(athlete_id: str) -> bool:
         cursor.close()
         conn.close()
     return exists
+
+def get_existing_athlete_ids(athlete_ids: list[str]) -> set[str]:
+    """
+    Get all existing athlete FFA IDs from the database in a single query.
+    This is much more efficient than calling athlete_exists() for each ID.
+
+    Args:
+        athlete_ids (list[str]): List of FFA IDs to check
+    Returns:
+        set[str]: Set of FFA IDs that already exist in the database
+    """
+    if not athlete_ids:
+        return set()
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Use IN clause to check all IDs at once
+        cursor.execute(
+            'SELECT ffa_id FROM athletes WHERE ffa_id = ANY(%s)',
+            (athlete_ids,)
+        )
+        existing_ids = {row[0] for row in cursor.fetchall()}
+        logger.debug("Found %d existing athletes out of %d checked", len(existing_ids), len(athlete_ids))
+        return existing_ids
+    except psycopg2.Error as e:
+        logger.error("Error checking existing athletes: %s", e)
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 def extract_athlete_data(athletes: dict, soup: BeautifulSoup) -> dict:
     """
@@ -150,7 +171,9 @@ def extract_athlete_data(athletes: dict, soup: BeautifulSoup) -> dict:
 
 def extract_athlete_data_parallel(athletes: dict, soup: BeautifulSoup) -> dict:
     """
-    Extract athlete data from a BeautifulSoup object using parallel requests
+    Extract athlete data from a BeautifulSoup object using parallel requests.
+    Optimized to check existing athletes in bulk before making HTTP requests.
+
     Args:
         athletes (dict): The athletes
         soup (BeautifulSoup): The BeautifulSoup object
@@ -160,20 +183,41 @@ def extract_athlete_data_parallel(athletes: dict, soup: BeautifulSoup) -> dict:
     if soup:
         athlete_links = soup.find_all('a', href=lambda x: x and 'athletes' in x)
 
-        # Préparer les tâches pour chaque athlète
-        with ThreadPoolExecutor(max_workers=24) as executor:
-            future_to_athlete = {executor.submit(fetch_and_extract_athlete_data, link): link for link in athlete_links}
-            for future in as_completed(future_to_athlete):
-                athlete_data = future.result()
-                if athlete_data:
-                    id_athlete = athlete_data['id']
-                    if id_athlete not in athletes:
-                        athletes[id_athlete] = athlete_data
+        # Extract all athlete IDs first
+        athlete_ids = []
+        link_by_id = {}
+        for link in athlete_links:
+            id_athlete = link['href'].split('/')[2].strip()
+            athlete_ids.append(id_athlete)
+            link_by_id[id_athlete] = link
+
+        # Check which athletes already exist in DB (single query)
+        existing_ids = get_existing_athlete_ids(athlete_ids)
+
+        # Filter out athletes that already exist
+        new_links = [link_by_id[id_athlete] for id_athlete in athlete_ids
+                     if id_athlete not in existing_ids and id_athlete not in athletes]
+
+        logger.info("Found %d athletes, %d already in DB, %d new to fetch",
+                   len(athlete_ids), len(existing_ids), len(new_links))
+
+        # Only process new athletes
+        if new_links:
+            with ThreadPoolExecutor(max_workers=24) as executor:
+                future_to_athlete = {executor.submit(fetch_and_extract_athlete_data, link): link for link in new_links}
+                for future in as_completed(future_to_athlete):
+                    athlete_data = future.result()
+                    if athlete_data:
+                        id_athlete = athlete_data['id']
+                        if id_athlete not in athletes:
+                            athletes[id_athlete] = athlete_data
     return athletes
 
 def fetch_and_extract_athlete_data(link):
     """
-    Fetch and extract athlete data from an individual athlete link
+    Fetch and extract athlete data from an individual athlete link.
+    Note: This function assumes the athlete doesn't exist in DB (filtering done upstream).
+
     Args:
         link (bs4.element.Tag): A BeautifulSoup tag containing the athlete link
     Returns:
@@ -183,14 +227,10 @@ def fetch_and_extract_athlete_data(link):
 
     logger.debug("Processing athlete ID: %s", id_athlete)
 
-    if athlete_exists(id_athlete):
-        return None
-
     name_athlete = link.get_text(strip=True)
-    # url = ATHLETE_BASE_URL.format(athlete_id=convert_athlete_id(id_athlete))
     url = ATHLETE_BASE_URL.format(athlete_id=id_athlete)
 
-    # Appeler une fonction pour extraire les détails de l'athlète
+    # Fetch athlete details from their page
     birth_date, license_id, sexe, nationality = extract_birth_date_and_license(url)
 
     return {
@@ -203,90 +243,127 @@ def fetch_and_extract_athlete_data(link):
         "nationality": nationality
     }
 
+def normalize_name(name: str) -> str:
+    """
+    Normalize a name for searching (lowercase, no accents, clean spaces).
+    This replicates the PostgreSQL normalize_text() function.
+    """
+    try:
+        from unidecode import unidecode
+        normalized = unidecode(name.lower())
+        # Clean multiple spaces
+        normalized = ' '.join(normalized.split())
+        return normalized
+    except ImportError:
+        # Fallback if unidecode is not available
+        return ' '.join(name.lower().split())
+
+
 def store_athletes(athletes: dict):
     """
-    Store the athletes in the PostgreSQL database
+    Store the athletes in the PostgreSQL database using the new schema.
+    Uses ffa_id as the unique FFA identifier and lets PostgreSQL handle:
+    - Auto-generated internal id (SERIAL)
+    - normalized_name via trigger (or manual for SQLite)
+    - Duplicate license_id via partial unique constraint
+
     Args:
-        athletes (dict): The athletes
+        athletes (dict): Dictionary with ffa_id as key and athlete info as value
     """
     global total_athletes
-    athletes_data = [(
-        athlete_id,
-        info['name'],
-        info['url'],
-        info['birth_date'],
-        info['license_id'],
-        info['sexe'],
-        info['nationality'])
-        for athlete_id, info in athletes.items()
-    ]
-
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    inserted = 0
+
     try:
-        cursor.executemany('''
-            INSERT INTO athletes (id, name, url, birth_date, license_id, sexe, nationality)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (id) DO NOTHING
-        ''', athletes_data)
+        for ffa_id, info in athletes.items():
+            normalized = normalize_name(info['name'])
+
+            # Insert or update based on ffa_id
+            # Include normalized_name for compatibility with SQLite (PostgreSQL trigger will override)
+            cursor.execute('''
+                INSERT INTO athletes (ffa_id, name, normalized_name, url, birth_date, license_id, sexe, nationality)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (ffa_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    normalized_name = EXCLUDED.normalized_name,
+                    url = EXCLUDED.url,
+                    birth_date = COALESCE(EXCLUDED.birth_date, athletes.birth_date),
+                    license_id = COALESCE(EXCLUDED.license_id, athletes.license_id),
+                    sexe = COALESCE(EXCLUDED.sexe, athletes.sexe),
+                    nationality = COALESCE(EXCLUDED.nationality, athletes.nationality)
+            ''', (
+                ffa_id, info['name'], normalized, info['url'], info['birth_date'],
+                info.get('license_id'), info['sexe'], info['nationality']
+            ))
+
+            if cursor.rowcount > 0:
+                inserted += 1
+
         conn.commit()
-        logger.info("Inserted %s athletes into the database", len(athletes))
-        total_athletes += len(athletes)
+        logger.info("Athletes stored: %d athletes", inserted)
+        total_athletes += inserted
     except psycopg2.Error as e:
-        logger.error("Error: %s", e)
+        logger.error("Error storing athletes: %s", e)
         conn.rollback()
         raise
     finally:
         cursor.close()
         conn.close()
-        with open('log.txt', 'a', encoding='utf-8') as f:
-            f.write(f"{datetime.now()} - {len(athletes)} athletes stored\n")
 
-def create_athletes_table():
+def ensure_schema_exists():
     """
-    Create the athletes table in the PostgreSQL database
+    Ensure the database schema exists.
+    If tables don't exist, create them using the schema from core.schema
     """
+    from core.schema import create_tables
+
     conn = get_db_connection()
     cursor = conn.cursor()
+
     try:
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS athletes (
-                id TEXT PRIMARY KEY,
-                name TEXT,
-                license_id TEXT,
-                url TEXT,
-                birth_date TEXT,
-                sexe TEXT,
-                nationality TEXT
-            )
-        ''')
-        conn.commit()
+        # Check if athletes table exists with the new schema
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'athletes' AND column_name = 'ffa_id'
+        """)
+
+        if cursor.fetchone() is None:
+            logger.info("Schema not found or outdated, creating new schema...")
+            cursor.close()
+            conn.close()
+            create_tables()
+            logger.info("Schema created successfully")
+        else:
+            logger.debug("Schema already exists")
     except psycopg2.Error as e:
-        logger.error("Error: %s", e)
-        conn.rollback()
+        logger.error("Error checking schema: %s", e)
         raise
     finally:
-        cursor.close()
-        conn.close()
+        if not cursor.closed:
+            cursor.close()
+        if not conn.closed:
+            conn.close()
 
 def retrieve_clubs(club_id: str, year: int) -> dict:
     """
     Retrieve the clubs from the PostgreSQL database only if the last year is greater or equal to the given year
     Args:
-        club_id (str): The club ID
+        club_id (str): The club FFA ID
         year (int): The year
     Returns:
-        dict: The clubs
+        dict: Dictionary with ffa_id as key and name as value
     """
     conn = get_db_connection()
     cursor = conn.cursor()
     res = {}
     try:
         if club_id:
-            cursor.execute('SELECT id, name FROM clubs WHERE id = %s', (club_id,))
+            cursor.execute('SELECT ffa_id, name FROM clubs WHERE ffa_id = %s', (club_id,))
         else:
-            cursor.execute('SELECT id, name FROM clubs WHERE first_year <= %s AND last_year >= %s', (year, year))
+            cursor.execute('SELECT ffa_id, name FROM clubs WHERE first_year <= %s AND last_year >= %s', (year, year))
         res = dict(cursor.fetchall())
     except psycopg2.Error as e:
         logger.error("Error: %s", e)
@@ -374,15 +451,14 @@ def update_athletes_info():
     cursor = conn.cursor()
 
     # Sélectionner tous les athlètes qui ont des informations manquantes
-    cursor.execute("SELECT id, url FROM athletes WHERE url IS NULL OR url = ''")
+    cursor.execute("SELECT ffa_id, url FROM athletes WHERE url IS NULL OR url = ''")
     athletes_to_update = cursor.fetchall()
     logger.info("Updating information for %s athletes", len(athletes_to_update))
 
     cpt = 0
     # Utiliser ThreadPoolExecutor pour paralléliser les mises à jour
     with ThreadPoolExecutor(max_workers=10) as executor:
-        # with ThreadPoolExecutor(max_workers=1) as executor:
-        future_to_id = {executor.submit(fetch_and_update_athlete, athlete_id): athlete_id for (athlete_id, _) in athletes_to_update}
+        future_to_id = {executor.submit(fetch_and_update_athlete, ffa_id): ffa_id for (ffa_id, _) in athletes_to_update}
         for future in as_completed(future_to_id):
             try:
                 cpt += 1
@@ -393,13 +469,13 @@ def update_athletes_info():
                 raise
     conn.close()
 
-def fetch_and_update_athlete(athlete_id):
+def fetch_and_update_athlete(ffa_id):
     """
-    Fetch and update athlete data for a given athlete ID in the PostgreSQL database.
+    Fetch and update athlete data for a given FFA ID in the PostgreSQL database.
     Args:
-        athlete_id (str): The athlete ID
+        ffa_id (str): The FFA ID of the athlete
     """
-    url = ATHLETE_BASE_URL.format(athlete_id=convert_athlete_id(athlete_id))
+    url = ATHLETE_BASE_URL.format(athlete_id=ffa_id)
     birth_date, license_id, sexe, nationality = extract_birth_date_and_license(url)
 
     # Mettre à jour la base de données
@@ -407,8 +483,8 @@ def fetch_and_update_athlete(athlete_id):
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE athletes SET url = %s, birth_date = %s, license_id = %s, sexe = %s, nationality = %s
-        WHERE id = %s
-    """, (url, birth_date, license_id, sexe, nationality, athlete_id))
+        WHERE ffa_id = %s
+    """, (url, birth_date, license_id, sexe, nationality, ffa_id))
     conn.commit()
     conn.close()
 
@@ -418,10 +494,10 @@ def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) ->
     Args:
         first_year (int): The first year
         last_year (int): The last year
-        club_id (str): The club ID
+        club_id (str): The club FFA ID
     """
     try:
-        create_athletes_table()
+        ensure_schema_exists()
         logger.info("Processing years from %s to %s", first_year, last_year)
         for year in range(first_year, last_year + 1):
             clubs = retrieve_clubs(club_id, year)
@@ -429,14 +505,14 @@ def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) ->
             logger.info("Year %s: Found %s clubs to process", year, nb_clubs)
             cpt = 0
 
-            for club in clubs:
+            for club_ffa_id in clubs:
                 cpt += 1
                 try:
-                    logger.info("%s / %s - Processing club %s for year %s", cpt, nb_clubs, clubs[club], year)
+                    logger.info("%s / %s - Processing club %s for year %s", cpt, nb_clubs, clubs[club_ffa_id], year)
                 except UnicodeEncodeError:
-                    logger.error("UnicodeEncodeError for %s", club)
+                    logger.error("UnicodeEncodeError for %s", club_ffa_id)
                     raise
-                athletes = extract_athletes_from_club(year, club)
+                athletes = extract_athletes_from_club(year, club_ffa_id)
                 store_athletes(athletes)
     except KeyboardInterrupt:
         logger.error("Interrupted by user")
@@ -478,6 +554,6 @@ def main():
         logger.info("Scrapping terminé : %s athlètes", total_athletes)
 
 if __name__ == '__main__':
-    setup_logging()
+    setup_logging('list_athletes')
     logger.info("Script started with args: %s", ' '.join(sys.argv))
     main()

@@ -9,8 +9,8 @@ import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 from bs4 import BeautifulSoup
-from common_config import get_logger, setup_logging
-from db import get_db_connection, create_database
+from core.config import get_logger, setup_logging
+from core.db import get_db_connection, create_database
 
 # URL de la base de données des clubs d'athlétisme
 FIRST_YEAR = 2004
@@ -124,40 +124,108 @@ def extract_clubs(clubs: dict, year: int) -> dict:
 
     return clubs
 
-def store_clubs(clubs: dict):
+def ensure_schema_exists():
     """
-    Stocke les clubs dans une base de données PostgreSQL.
-
-    Args:
-        clubs (dict): Dictionnaire des clubs
+    Ensure the database schema exists.
+    If tables don't exist, create them using the schema from core.schema
     """
+    from core.schema import create_tables
+    import psycopg2
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS clubs (
-            id TEXT PRIMARY KEY,
-            name TEXT,
-            first_year INTEGER DEFAULT 0,
-            last_year INTEGER DEFAULT 0
-        )
-    ''')
+    try:
+        # Check if clubs table exists with the new schema
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'clubs' AND column_name = 'ffa_id'
+        """)
 
-    for club_id, club in clubs.items():
-        name = club[0]
-        first_year = club[1]
-        last_year = club[2]
+        if cursor.fetchone() is None:
+            logger.info("Schema not found or outdated, creating new schema...")
+            cursor.close()
+            conn.close()
+            create_tables()
+            logger.info("Schema created successfully")
+        else:
+            logger.debug("Schema already exists")
+    except psycopg2.Error as e:
+        logger.error("Error checking schema: %s", e)
+        raise
+    finally:
+        if not cursor.closed:
+            cursor.close()
+        if not conn.closed:
+            conn.close()
 
-        cursor.execute('''
-            INSERT INTO clubs (id, name, first_year, last_year)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (id) DO UPDATE SET last_year = EXCLUDED.last_year
-        ''', (club_id, name, first_year, last_year))
+def normalize_name(name: str) -> str:
+    """
+    Normalize a name for searching (lowercase, no accents, clean spaces).
+    This replicates the PostgreSQL normalize_text() function.
+    """
+    try:
+        from unidecode import unidecode
+        normalized = unidecode(name.lower())
+        # Clean multiple spaces
+        normalized = ' '.join(normalized.split())
+        return normalized
+    except ImportError:
+        # Fallback if unidecode is not available
+        return ' '.join(name.lower().split())
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+
+def store_clubs(clubs: dict):
+    """
+    Stocke les clubs dans une base de données PostgreSQL using the new schema.
+    Uses ffa_id as the unique FFA identifier and lets PostgreSQL handle:
+    - Auto-generated internal id (SERIAL)
+    - normalized_name via trigger (or manual for SQLite)
+
+    Args:
+        clubs (dict): Dictionary with club_ffa_id as key and (name, first_year, last_year) as value
+    """
+    import psycopg2
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    inserted = 0
+    updated = 0
+
+    try:
+        for club_ffa_id, club in clubs.items():
+            name = club[0]
+            first_year = club[1]
+            last_year = club[2]
+            normalized = normalize_name(name)
+
+            # Insert or update based on ffa_id
+            # Include normalized_name for compatibility with SQLite (PostgreSQL trigger will override)
+            cursor.execute('''
+                INSERT INTO clubs (ffa_id, name, normalized_name, first_year, last_year)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (ffa_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    normalized_name = EXCLUDED.normalized_name,
+                    first_year = LEAST(clubs.first_year, EXCLUDED.first_year),
+                    last_year = GREATEST(clubs.last_year, EXCLUDED.last_year)
+            ''', (club_ffa_id, name, normalized, first_year, last_year))
+
+            if cursor.rowcount > 0:
+                inserted += 1
+
+        conn.commit()
+        logger.info("Clubs stored: %d clubs", inserted)
+
+    except psycopg2.Error as e:
+        logger.error("Error storing clubs: %s", e)
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 def main():
     """
@@ -179,6 +247,7 @@ def main():
 
     try:
         create_database()
+        ensure_schema_exists()
 
         # for each year from FIRST_YEAR to current year
         clubs = {}
@@ -192,5 +261,5 @@ def main():
         logger.error("Erreur lors de la requête : %s", e)
 
 if __name__ == '__main__':
-    setup_logging()
+    setup_logging('list_clubs')
     main()

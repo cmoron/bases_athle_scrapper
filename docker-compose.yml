@@ -1,7 +1,6 @@
 services:
   postgres:
-    image: postgres:latest
-    container_name: postgres_container_bases_athle_scrapper
+    image: postgres:16
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -10,9 +9,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db:/var/lib/postgresql/db
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     restart: unless-stopped
+
+  scraper:
+    build: .
+    container_name: bases_athle_scraper
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 
 volumes:
   postgres_data:

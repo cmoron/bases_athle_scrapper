@@ -5,8 +5,8 @@ from bs4 import BeautifulSoup
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT))
 
-import list_clubs
-import list_athletes
+import scraper.list_clubs as list_clubs
+import scraper.list_athletes as list_athletes
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
