@@ -13,11 +13,15 @@ services:
 
   scraper:
     build: .
-    container_name: bases_athle_scraper
     depends_on:
       - postgres
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DB_HOST: postgres
+      DB_PORT: 5432
+    volumes:
+      - ./logs:/app/logs  # Persist logs on host
+    restart: "no"
 
 volumes:
   postgres_data:
