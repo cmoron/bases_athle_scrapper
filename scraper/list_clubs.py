@@ -16,6 +16,11 @@ from core.db import get_db_connection, create_database
 FIRST_YEAR = 2004
 BASES_ATHLE_URL = 'https://www.athle.fr/bases/'
 SESSION = requests.Session()
+adapter = HTTPAdapter = requests.adapters.HTTPAdapter(
+    pool_connections=24,
+    pool_maxsize=24,
+)
+SESSION.mount('https://', adapter)
 
 logger = get_logger(__name__)
 
@@ -34,7 +39,7 @@ def get_max_club_pages(year: int) -> int:
     response = SESSION.get(club_base_url, timeout=20)
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.text, 'html.parser')
+    soup = BeautifulSoup(response.text, 'lxml')
     select_element = soup.find('div', id='optionsPagination')
 
     if select_element:
@@ -53,7 +58,7 @@ def fetch_club_page(url: str) -> BeautifulSoup:
     try:
         response = SESSION.get(url, timeout=20)
         response.raise_for_status()
-        return BeautifulSoup(response.text, 'html.parser')
+        return BeautifulSoup(response.text, 'lxml')
     except requests.RequestException as e:
         logger.error("Error fetching %s: %s", url, e)
         return None
