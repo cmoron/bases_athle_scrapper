@@ -1,7 +1,7 @@
 """
-Tests for duplicate athlete handling based on license_id
+Tests for duplicate athlete handling based on license_id.
+Utilise PostgreSQL via testcontainers (voir conftest.py).
 """
-import pytest
 import sys
 from pathlib import Path
 
@@ -12,44 +12,7 @@ if str(ROOT) not in sys.path:
 from core.db import get_db_connection
 from scraper.list_athletes import store_athletes
 
-
-def create_test_schema(conn):
-    """Create a simplified schema for SQLite tests"""
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS athletes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ffa_id TEXT NOT NULL UNIQUE,
-            license_id TEXT,
-            name TEXT NOT NULL,
-            normalized_name TEXT NOT NULL,
-            url TEXT,
-            birth_date TEXT,
-            sexe TEXT,
-            nationality TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-
-
-@pytest.fixture
-def db_dsn(tmp_path, monkeypatch):
-    """Setup test database"""
-    db_file = tmp_path / "test.db"
-    dsn = f"sqlite:///{db_file}"
-    monkeypatch.setenv("DATABASE_URL", dsn)
-
-    # Create test schema
-    conn = get_db_connection()
-    create_test_schema(conn)
-    conn.close()
-
-    yield dsn
-
-    if db_file.exists():
-        db_file.unlink()
+# La fixture db_dsn est définie dans conftest.py et utilise PostgreSQL
 
 
 def test_store_new_athlete(db_dsn):
@@ -69,7 +32,7 @@ def test_store_new_athlete(db_dsn):
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT ffa_id, name, license_id FROM athletes WHERE ffa_id = ?", ("123",))
+    cur.execute("SELECT ffa_id, name, license_id FROM athletes WHERE ffa_id = %s", ("123",))
     row = cur.fetchone()
     conn.close()
 
@@ -109,7 +72,7 @@ def test_update_existing_athlete_same_id(db_dsn):
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT name, url FROM athletes WHERE ffa_id = ?", ("123",))
+    cur.execute("SELECT name, url FROM athletes WHERE ffa_id = %s", ("123",))
     row = cur.fetchone()
     conn.close()
 
@@ -118,11 +81,13 @@ def test_update_existing_athlete_same_id(db_dsn):
 
 
 def test_different_ffa_ids_same_license(db_dsn):
-    """Test that two different ffa_ids can have the same license_id"""
-    # With the new schema, ffa_id is the unique key, not license_id
-    # So two different ffa_ids with same license_id should both be stored
+    """Test that two different ffa_ids CANNOT have the same valid license_id"""
+    # Contrainte métier : un numéro de licence FFA est unique par athlète
+    # La FFA ne recycle pas les numéros de licence
 
-    # Insert athlete with first ffa_id
+    import psycopg2.errors
+
+    # Insert athlete with first ffa_id and license_id
     athletes = {
         "OLD123": {
             "name": "Test Athlete",
@@ -135,38 +100,35 @@ def test_different_ffa_ids_same_license(db_dsn):
     }
     store_athletes(athletes)
 
-    # Insert same athlete with different ffa_id (same license_id)
+    # Try to insert different athlete with same license_id
+    # This should FAIL because license_id must be unique
     athletes = {
         "NEW456": {
-            "name": "Test Athlete",
+            "name": "Different Athlete",
             "url": "http://www.athle.fr/athletes/NEW456",
-            "birth_date": "2000",
+            "birth_date": "2001",
             "license_id": "L123",
-            "sexe": "M",
+            "sexe": "F",
             "nationality": "FRA",
         }
     }
-    store_athletes(athletes)
 
+    # Should raise UniqueViolation
+    try:
+        store_athletes(athletes)
+        assert False, "Expected UniqueViolation but insertion succeeded"
+    except psycopg2.errors.UniqueViolation:
+        # Expected behavior: duplicate license_id rejected
+        pass
+
+    # Verify only one athlete exists
     conn = get_db_connection()
     cur = conn.cursor()
-
-    # Both ffa_ids should exist (ffa_id is unique, not license_id)
-    cur.execute("SELECT COUNT(*) FROM athletes WHERE license_id = ?", ("L123",))
+    cur.execute("SELECT COUNT(*) FROM athletes WHERE license_id = %s", ("L123",))
     count = cur.fetchone()[0]
-
-    cur.execute("SELECT ffa_id FROM athletes WHERE ffa_id = ?", ("OLD123",))
-    old_exists = cur.fetchone() is not None
-
-    cur.execute("SELECT ffa_id FROM athletes WHERE ffa_id = ?", ("NEW456",))
-    new_exists = cur.fetchone() is not None
-
     conn.close()
 
-    # Both should exist with new schema
-    assert count == 2
-    assert old_exists
-    assert new_exists
+    assert count == 1, "Only one athlete should exist with this license_id"
 
 
 def test_athlete_without_license_id(db_dsn):
@@ -185,7 +147,7 @@ def test_athlete_without_license_id(db_dsn):
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT ffa_id, name FROM athletes WHERE ffa_id = ?", ("NO_LICENSE",))
+    cur.execute("SELECT ffa_id, name FROM athletes WHERE ffa_id = %s", ("NO_LICENSE",))
     row = cur.fetchone()
     conn.close()
 
@@ -224,7 +186,7 @@ def test_add_license_id_to_existing_athlete(db_dsn):
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT license_id FROM athletes WHERE ffa_id = ?", ("ATHLETE1",))
+    cur.execute("SELECT license_id FROM athletes WHERE ffa_id = %s", ("ATHLETE1",))
     license_id = cur.fetchone()[0]
     conn.close()
 
@@ -247,7 +209,7 @@ def test_athlete_with_dash_license_id(db_dsn):
 
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT ffa_id, name, license_id FROM athletes WHERE ffa_id = ?", ("DASH1",))
+    cur.execute("SELECT ffa_id, name, license_id FROM athletes WHERE ffa_id = %s", ("DASH1",))
     row = cur.fetchone()
     conn.close()
 
@@ -288,7 +250,7 @@ def test_no_duplicate_with_dash_license(db_dsn):
     cur = conn.cursor()
 
     # Both athletes should exist (no conflict since '-' is treated as invalid)
-    cur.execute("SELECT COUNT(*) FROM athletes WHERE license_id = ?", ("-",))
+    cur.execute("SELECT COUNT(*) FROM athletes WHERE license_id = %s", ("-",))
     count = cur.fetchone()[0]
     conn.close()
 

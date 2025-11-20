@@ -1,0 +1,92 @@
+name: CI - Tests et Qualimétrie
+
+on:
+  push:
+    branches: [ main, refactor ]
+  pull_request:
+    branches: [ main, refactor ]
+
+jobs:
+  quality:
+    name: Qualité du code
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Installer dépendances
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Black - Vérifier formatage
+      run: black --check --diff .
+      continue-on-error: true
+
+    - name: Ruff - Linter
+      run: ruff check .
+      continue-on-error: true
+
+    - name: MyPy - Type checking
+      run: mypy scraper/ core/ tools/ --ignore-missing-imports
+      continue-on-error: true
+
+  tests:
+    name: Tests avec coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Installer dépendances
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements-dev.txt
+
+    - name: Lancer tests avec coverage
+      run: |
+        pytest --cov --cov-report=xml --cov-report=term-missing
+      env:
+        DATABASE_URL: postgresql://test_user:test_pass@localhost:5432/test_db
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
+      continue-on-error: true
+
+    - name: Afficher résumé coverage
+      run: |
+        echo "## 📊 Coverage Report" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        coverage report >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

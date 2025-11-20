@@ -27,13 +27,6 @@ echo "⚠️  ATTENTION: Cette opération peut prendre plusieurs heures"
 echo "   - Clubs: Environ 5-10 minutes"
 echo "   - Athlètes: Plusieurs heures selon le nombre de clubs et d'années"
 echo ""
-read -p "Voulez-vous continuer ? (o/N) " -n 1 -r
-
-# Vérifier que Python est disponible
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Erreur: python3 n'est pas installé"
-    exit 1
-fi
 
 # Étape 1: Récupération de tous les clubs
 echo "================================================================================"

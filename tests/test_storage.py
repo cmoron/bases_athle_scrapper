@@ -1,8 +1,9 @@
-import os
+"""
+Tests pour le stockage des clubs et athlètes.
+Utilise PostgreSQL via testcontainers (voir conftest.py).
+"""
 import sys
 from pathlib import Path
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -12,61 +13,7 @@ from core.db import get_db_connection
 from scraper.list_clubs import store_clubs
 from scraper.list_athletes import store_athletes
 
-
-def create_test_schema(conn):
-    """Create a simplified schema for SQLite tests (without PostgreSQL-specific features)"""
-    cursor = conn.cursor()
-
-    # Simplified clubs table for tests
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS clubs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ffa_id TEXT NOT NULL UNIQUE,
-            name TEXT NOT NULL,
-            normalized_name TEXT NOT NULL,
-            first_year INTEGER,
-            last_year INTEGER,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    # Simplified athletes table for tests
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS athletes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ffa_id TEXT NOT NULL UNIQUE,
-            license_id TEXT,
-            name TEXT NOT NULL,
-            normalized_name TEXT NOT NULL,
-            url TEXT,
-            birth_date TEXT,
-            sexe TEXT,
-            nationality TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-
-    conn.commit()
-
-
-@pytest.fixture
-def db_dsn(tmp_path, monkeypatch):
-    db_file = tmp_path / "test.db"
-    dsn = f"sqlite:///{db_file}"
-    monkeypatch.setenv("DATABASE_URL", dsn)
-
-    # Create test schema
-    conn = get_db_connection()
-    create_test_schema(conn)
-    conn.close()
-
-    yield dsn
-
-    if db_file.exists():
-        db_file.unlink()
-
+# La fixture db_dsn est définie dans conftest.py et utilise PostgreSQL
 
 def test_store_clubs(db_dsn):
     clubs = {

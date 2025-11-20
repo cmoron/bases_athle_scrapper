@@ -12,29 +12,50 @@ FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
 def test_extract_clubs_from_page():
     html = (FIXTURES / "clubs.html").read_text()
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
     clubs = list_clubs.extract_clubs_from_page(soup)
     assert clubs == {"1234": "Club Name", "5678": "Second Club"}
 
 def test_extract_athlete_data_parallel(monkeypatch):
     html = (FIXTURES / "club_athletes.html").read_text()
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(html, "lxml")
 
     def fake_extract(url):
         return "2004", "2387169", "F", "FRA"
 
+    def fake_get_existing(athlete_ids):
+        # Mock: retourne un set vide (aucun athlète existant)
+        return set()
+
     monkeypatch.setattr(list_athletes, "extract_birth_date_and_license", fake_extract)
+    monkeypatch.setattr(list_athletes, "get_existing_athlete_ids", fake_get_existing)
     athletes = list_athletes.extract_athlete_data_parallel({}, soup)
     from pprint import pprint
     pprint(athletes)
-    expected_url = list_athletes.ATHLETE_BASE_URL.format(
+    expected_url_1 = list_athletes.ATHLETE_BASE_URL.format(
         athlete_id="974476"
     )
+    expected_url_2 = list_athletes.ATHLETE_BASE_URL.format(
+        athlete_id="974477"
+    )
+
+    from pprint import pprint
+    pprint(athletes)
+
     assert athletes == {
         "974476": {
             "id": "974476",
             "name": "DOE Jane",
-            "url": expected_url,
+            "url": expected_url_1,
+            "birth_date": "2004",
+            "license_id": "2387169",
+            "sexe": "F",
+            "nationality": "FRA",
+        },
+        "974477": {
+            "id": "974477",
+            "name": "DOE John",
+            "url": expected_url_2,
             "birth_date": "2004",
             "license_id": "2387169",
             "sexe": "F",

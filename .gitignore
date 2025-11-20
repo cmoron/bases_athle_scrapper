@@ -7,3 +7,8 @@ __pycache__
 /*.log
 /*.dump
 /logs
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
