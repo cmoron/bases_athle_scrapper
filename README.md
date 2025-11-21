@@ -1,6 +1,9 @@
 # Bases Athlé Scraper 🏃
 
 [![CI](https://github.com/cmoron/bases_athle_scrapper/actions/workflows/ci.yml/badge.svg)](https://github.com/cmoron/bases_athle_scrapper/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=coverage)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
