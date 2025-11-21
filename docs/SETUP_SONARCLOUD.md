@@ -90,11 +90,13 @@ Le fichier `.github/workflows/ci.yml` doit contenir (déjà configuré ✅) :
 
 ```yaml
 - name: SonarCloud Scan
-  uses: SonarSource/sonarcloud-github-action@master
+  uses: SonarSource/sonarqube-scan-action@fd88b7d7ccbaefd23d8f36f73b59db7a3d246602  # v6.0.0
   env:
     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 ```
+
+⚠️ **Note importante** : Nous utilisons le SHA complet du commit au lieu d'un tag ou d'une branche pour des raisons de sécurité. C'est une bonne pratique recommandée par SonarCloud pour éviter les modifications malveillantes des actions GitHub.
 
 ## Étape 7 : Lancer la première analyse
 
