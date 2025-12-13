@@ -15,7 +15,7 @@ Ce guide explique comment configurer SonarCloud pour obtenir une analyse de qual
 
 ## Prérequis
 
-- Un compte GitHub avec le repository `cmoron/bases_athle_scrapper`
+- Un compte GitHub avec le repository `cmoron/mypacer_scraper`
 - Accès administrateur au repository
 - Le fichier `sonar-project.properties` déjà configuré ✅
 
@@ -39,7 +39,7 @@ Si c'est votre première utilisation de SonarCloud :
 ## Étape 3 : Ajouter votre repository
 
 1. Une fois l'organisation créée, cliquez sur **"Analyze new project"**
-2. Sélectionnez le repository **`bases_athle_scrapper`**
+2. Sélectionnez le repository **`mypacer_scraper`**
 3. Cliquez sur **"Set Up"**
 
 ### Configuration du projet
@@ -53,7 +53,7 @@ SonarCloud va détecter automatiquement :
 
 Pour que GitHub Actions puisse envoyer les résultats à SonarCloud :
 
-1. Dans SonarCloud, allez sur votre projet `bases_athle_scrapper`
+1. Dans SonarCloud, allez sur votre projet `mypacer_scraper`
 2. Cliquez sur **"Administration"** (en haut à droite) > **"Analysis Method"**
 3. Sélectionnez **"GitHub Actions"**
 4. SonarCloud va afficher :
@@ -64,7 +64,7 @@ Pour que GitHub Actions puisse envoyer les résultats à SonarCloud :
 
 ## Étape 5 : Configurer le secret GitHub
 
-1. Allez sur GitHub : `https://github.com/cmoron/bases_athle_scrapper/settings/secrets/actions`
+1. Allez sur GitHub : `https://github.com/cmoron/mypacer_scraper/settings/secrets/actions`
 2. Cliquez sur **"New repository secret"**
 3. Configurez le secret :
    - **Name** : `SONAR_TOKEN`
@@ -78,7 +78,7 @@ Pour que GitHub Actions puisse envoyer les résultats à SonarCloud :
 Le fichier doit contenir (déjà configuré ✅) :
 
 ```properties
-sonar.projectKey=cmoron_bases_athle_scrapper
+sonar.projectKey=cmoron_mypacer_scraper
 sonar.organization=cmoron
 ```
 
@@ -108,7 +108,7 @@ Le fichier `.github/workflows/ci.yml` doit contenir (déjà configuré ✅) :
    ```
 
 2. Vérifiez que la CI s'exécute correctement sur GitHub Actions :
-   - Allez sur `https://github.com/cmoron/bases_athle_scrapper/actions`
+   - Allez sur `https://github.com/cmoron/mypacer_scraper/actions`
    - Vérifiez que l'étape **"SonarCloud Scan"** passe avec succès
 
 3. Une fois la CI terminée, retournez sur SonarCloud :
@@ -120,9 +120,9 @@ Le fichier `.github/workflows/ci.yml` doit contenir (déjà configuré ✅) :
 
 Les badges dans le README devraient maintenant s'afficher correctement :
 
-- [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper) **Quality Gate** : Passed/Failed
-- [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=coverage)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper) **Coverage** : Pourcentage
-- [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper) **Code Smells** : Nombre
+- [![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper) **Quality Gate** : Passed/Failed
+- [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=coverage)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper) **Coverage** : Pourcentage
+- [![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper) **Code Smells** : Nombre
 
 ## Métriques SonarCloud
 
@@ -179,7 +179,7 @@ ls -la coverage.xml
 **Solution :**
 Vérifiez dans `sonar-project.properties` :
 ```properties
-sonar.projectKey=cmoron_bases_athle_scrapper  # Doit correspondre exactement
+sonar.projectKey=cmoron_mypacer_scraper  # Doit correspondre exactement
 sonar.organization=cmoron                      # Doit correspondre à votre org
 ```
 

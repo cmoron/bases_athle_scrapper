@@ -24,7 +24,7 @@ Suite aux changements majeurs du site bases.athle.fr :
 ## 🏗️ Nouvelle architecture
 
 ```
-bases_athle_scrapper/
+mypacer_scraper/
 ├── core/                       # ✅ Module fondamental
 │   ├── __init__.py
 │   ├── db.py                   # ✅ Connexion base de données

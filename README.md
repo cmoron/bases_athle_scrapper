@@ -1,11 +1,11 @@
 # Bases Athlé Scraper 🏃
 
-[![CI](https://github.com/cmoron/bases_athle_scrapper/actions/workflows/ci.yml/badge.svg)](https://github.com/cmoron/bases_athle_scrapper/actions/workflows/ci.yml)
-[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper)
-[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper)
-[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper)
-[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=cmoron_bases_athle_scrapper&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=cmoron_bases_athle_scrapper)
+[![CI](https://github.com/cmoron/mypacer_scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/cmoron/mypacer_scraper/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper)
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)

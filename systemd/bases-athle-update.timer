@@ -1,0 +1,14 @@
+[Unit]
+Description=Timer pour la mise à jour hebdomadaire de la base athlétisme
+Requires=bases-athle-update.service
+
+[Timer]
+# Tous les lundis à 20h00
+OnCalendar=Mon *-*-* 20:00:00
+# Rattraper les exécutions manquées si le système était éteint
+Persistent=true
+# Aléatoire de 0 à 15 minutes pour éviter les pics de charge
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target

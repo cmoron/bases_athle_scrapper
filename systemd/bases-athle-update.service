@@ -1,0 +1,15 @@
+[Unit]
+Description=Mise à jour de la base de données athlétisme
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=cyril
+WorkingDirectory=/home/cyril/src/mypacer/mypacer_scraper
+ExecStart=/home/cyril/src/mypacer/mypacer_scraper/update_database.sh
+StandardOutput=append:/home/cyril/src/mypacer/mypacer_scraper/update.log
+StandardError=append:/home/cyril/src/mypacer/mypacer_scraper/update.log
+
+[Install]
+WantedBy=multi-user.target
