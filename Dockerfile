@@ -31,11 +31,21 @@ FROM base AS dev
 COPY requirements-dev.txt .
 RUN pip install --no-cache-dir -r requirements-dev.txt
 
-# Copy source code
-COPY . .
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copy only necessary files and directories
+COPY --chown=appuser:appuser core/ ./core/
+COPY --chown=appuser:appuser scraper/ ./scraper/
+COPY --chown=appuser:appuser tools/ ./tools/
+COPY --chown=appuser:appuser populate_database.sh update_database.sh ./
+COPY --chown=appuser:appuser crontab ./crontab
 
 # Make scripts executable
 RUN chmod +x populate_database.sh update_database.sh
+
+# Switch to non-root user
+USER appuser
 
 # Keep container running for manual interaction
 # Use: docker-compose exec scraper bash
@@ -56,14 +66,21 @@ RUN wget -q "$SUPERCRONIC_URL" \
     && chmod +x "$SUPERCRONIC" \
     && mv "$SUPERCRONIC" /usr/local/bin/supercronic
 
-# Copy source code
-COPY . .
+# Create non-root user
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+
+# Copy only necessary files and directories
+COPY --chown=appuser:appuser core/ ./core/
+COPY --chown=appuser:appuser scraper/ ./scraper/
+COPY --chown=appuser:appuser tools/ ./tools/
+COPY --chown=appuser:appuser populate_database.sh update_database.sh ./
+COPY --chown=appuser:appuser crontab ./crontab
 
 # Make scripts executable
 RUN chmod +x populate_database.sh update_database.sh
 
-# Copy crontab file
-COPY crontab /app/crontab
+# Switch to non-root user
+USER appuser
 
 # Run Supercronic with crontab
 # This will keep the container running and execute scheduled tasks
