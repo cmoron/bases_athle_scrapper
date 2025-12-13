@@ -2,6 +2,7 @@
 Tests pour le stockage des clubs et athlètes.
 Utilise PostgreSQL via testcontainers (voir conftest.py).
 """
+
 import sys
 from pathlib import Path
 
@@ -10,10 +11,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.db import get_db_connection
-from scraper.list_clubs import store_clubs
 from scraper.list_athletes import store_athletes
+from scraper.list_clubs import store_clubs
 
 # La fixture db_dsn est définie dans conftest.py et utilise PostgreSQL
+
 
 def test_store_clubs(db_dsn):
     clubs = {
@@ -47,9 +49,7 @@ def test_store_athletes(db_dsn):
     store_athletes(athletes)
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        "SELECT ffa_id, name, url, birth_date, license_id, sexe, nationality FROM athletes"
-    )
+    cur.execute("SELECT ffa_id, name, url, birth_date, license_id, sexe, nationality FROM athletes")
     rows = cur.fetchall()
     conn.close()
     assert len(rows) == 1

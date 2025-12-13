@@ -4,25 +4,28 @@ Récupère les données des clubs d'athlétisme pour une année donnée et les s
 """
 
 import argparse
-from datetime import datetime
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+
 import requests
 from bs4 import BeautifulSoup
+
 from core.config import get_logger, setup_logging
-from core.db import get_db_connection, create_database
+from core.db import create_database, get_db_connection
 
 # URL de la base de données des clubs d'athlétisme
 FIRST_YEAR = 2004
-BASES_ATHLE_URL = 'https://www.athle.fr/bases/'
+BASES_ATHLE_URL = "https://www.athle.fr/bases/"
 SESSION = requests.Session()
 adapter = HTTPAdapter = requests.adapters.HTTPAdapter(
     pool_connections=24,
     pool_maxsize=24,
 )
-SESSION.mount('https://', adapter)
+SESSION.mount("https://", adapter)
 
 logger = get_logger(__name__)
+
 
 def get_max_club_pages(year: int) -> int:
     """
@@ -34,18 +37,22 @@ def get_max_club_pages(year: int) -> int:
         int: Nombre de pages de clubs
     """
     max_pages = 0
-    club_base_url = BASES_ATHLE_URL + f'/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmsexe=&frmligue=&frmdepartement=&frmnclub=&frmruptures='
+    club_base_url = (
+        BASES_ATHLE_URL
+        + f"/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmsexe=&frmligue=&frmdepartement=&frmnclub=&frmruptures="
+    )
 
     response = SESSION.get(club_base_url, timeout=20)
     response.raise_for_status()
 
-    soup = BeautifulSoup(response.text, 'lxml')
-    select_element = soup.find('div', id='optionsPagination')
+    soup = BeautifulSoup(response.text, "lxml")
+    select_element = soup.find("div", id="optionsPagination")
 
     if select_element:
-        max_pages = len(select_element.find_all('div', class_='select-option'))
+        max_pages = len(select_element.find_all("div", class_="select-option"))
 
     return max_pages
+
 
 def fetch_club_page(url: str) -> BeautifulSoup:
     """
@@ -58,10 +65,11 @@ def fetch_club_page(url: str) -> BeautifulSoup:
     try:
         response = SESSION.get(url, timeout=20)
         response.raise_for_status()
-        return BeautifulSoup(response.text, 'lxml')
+        return BeautifulSoup(response.text, "lxml")
     except requests.RequestException as e:
         logger.error("Error fetching %s: %s", url, e)
         return None
+
 
 def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
     """
@@ -82,7 +90,7 @@ def extract_clubs_from_page(soup: BeautifulSoup) -> dict:
             continue
 
         name_td = tds[2]  # colonne "Club" (contient un <a>)
-        id_td = tds[3]    # colonne "N°Club"
+        id_td = tds[3]  # colonne "N°Club"
 
         a = name_td.find("a")
         if not a:
@@ -108,7 +116,10 @@ def extract_clubs(clubs: dict, year: int) -> dict:
               et leur nom et année comme valeur
     """
     max_club_pages = get_max_club_pages(year)
-    club_base_url = BASES_ATHLE_URL + f'/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmsexe=&frmligue=&frmdepartement=&frmnclub=&frmruptures=&frmposition='
+    club_base_url = (
+        BASES_ATHLE_URL
+        + f"/liste.aspx?frmpostback=true&frmbase=cclubs&frmmode=1&frmespace=0&frmsaison={year}&frmsexe=&frmligue=&frmdepartement=&frmnclub=&frmruptures=&frmposition="
+    )
     urls = [club_base_url + str(page) for page in range(max_club_pages)]
 
     with ThreadPoolExecutor(max_workers=10) as executor:
@@ -122,31 +133,39 @@ def extract_clubs(clubs: dict, year: int) -> dict:
                         if club_id not in clubs:
                             clubs[club_id] = (club_name, year, year)
                         else:
-                            clubs[club_id] = (club_name, min(clubs[club_id][1], year), max(clubs[club_id][2], year))
+                            clubs[club_id] = (
+                                club_name,
+                                min(clubs[club_id][1], year),
+                                max(clubs[club_id][2], year),
+                            )
                         logger.debug("Fetched club %s: %s", club_id, clubs[club_id])
             except requests.RequestException as e:
                 logger.error("Request error for URL %s: %s", future_to_url[future], e)
 
     return clubs
 
+
 def ensure_schema_exists():
     """
     Ensure the database schema exists.
     If tables don't exist, create them using the schema from core.schema
     """
-    from core.schema import create_tables
     import psycopg2
+
+    from core.schema import create_tables
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
         # Check if clubs table exists with the new schema
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT column_name
             FROM information_schema.columns
             WHERE table_name = 'clubs' AND column_name = 'ffa_id'
-        """)
+        """
+        )
 
         if cursor.fetchone() is None:
             logger.info("Schema not found or outdated, creating new schema...")
@@ -165,6 +184,7 @@ def ensure_schema_exists():
         if not conn.closed:
             conn.close()
 
+
 def normalize_name(name: str) -> str:
     """
     Normalize a name for searching (lowercase, no accents, clean spaces).
@@ -172,13 +192,14 @@ def normalize_name(name: str) -> str:
     """
     try:
         from unidecode import unidecode
+
         normalized = unidecode(name.lower())
         # Clean multiple spaces
-        normalized = ' '.join(normalized.split())
+        normalized = " ".join(normalized.split())
         return normalized
     except ImportError:
         # Fallback if unidecode is not available
-        return ' '.join(name.lower().split())
+        return " ".join(name.lower().split())
 
 
 def store_clubs(clubs: dict):
@@ -208,7 +229,8 @@ def store_clubs(clubs: dict):
 
             # Insert or update based on ffa_id
             # Include normalized_name for compatibility with SQLite (PostgreSQL trigger will override)
-            cursor.execute('''
+            cursor.execute(
+                """
                 INSERT INTO clubs (ffa_id, name, normalized_name, first_year, last_year)
                 VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT (ffa_id) DO UPDATE SET
@@ -216,7 +238,9 @@ def store_clubs(clubs: dict):
                     normalized_name = EXCLUDED.normalized_name,
                     first_year = LEAST(clubs.first_year, EXCLUDED.first_year),
                     last_year = GREATEST(clubs.last_year, EXCLUDED.last_year)
-            ''', (club_ffa_id, name, normalized, first_year, last_year))
+            """,
+                (club_ffa_id, name, normalized, first_year, last_year),
+            )
 
             if cursor.rowcount > 0:
                 inserted += 1
@@ -232,17 +256,21 @@ def store_clubs(clubs: dict):
         cursor.close()
         conn.close()
 
+
 def main():
     """
     Fonction principale
     """
     parser = argparse.ArgumentParser(
-        description="Récupère les données des clubs d'athlétisme FFA sur bases.athle")
-    parser.add_argument("--first-year", type=int, default=FIRST_YEAR,
-        help=f"Année de départ pour l'extraction (défaut : {FIRST_YEAR})"
+        description="Récupère les données des clubs d'athlétisme FFA sur bases.athle"
+    )
+    parser.add_argument(
+        "--first-year",
+        type=int,
+        default=FIRST_YEAR,
+        help=f"Année de départ pour l'extraction (défaut : {FIRST_YEAR})",
     )
     args = parser.parse_args()
-
 
     # Calcul de la saison actuelle : si on est à partir de septembre, on prend année+1
     now = datetime.now()
@@ -265,6 +293,7 @@ def main():
     except requests.RequestException as e:
         logger.error("Erreur lors de la requête : %s", e)
 
-if __name__ == '__main__':
-    setup_logging('list_clubs')
+
+if __name__ == "__main__":
+    setup_logging("list_clubs")
     main()

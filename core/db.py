@@ -1,21 +1,25 @@
 """
 This module contains functions to connect to the PostgreSQL database.
 """
+
 import os
 import sqlite3
-from typing import Optional
 from urllib.parse import urlparse
-from dotenv import load_dotenv
+
 import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+from dotenv import load_dotenv
 from psycopg2 import OperationalError, sql
+from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
+
 from .config import get_logger
 
 logger = get_logger(__name__)
 load_dotenv()
 
+
 class DatabaseConnectionError(Exception):
     """Exception levée lors d'un échec de connexion à la base de données."""
+
 
 class SQLiteCursorWrapper:
     """Minimal wrapper translating psycopg2 style placeholders for sqlite."""
@@ -44,14 +48,14 @@ class SQLiteConnectionWrapper:
         self.conn = conn
 
     def cursor(self):
-        """ Mimic psycopg2's cursor method. """
+        """Mimic psycopg2's cursor method."""
         return SQLiteCursorWrapper(self.conn.cursor())
 
     def __getattr__(self, name):
         return getattr(self.conn, name)
 
 
-def get_db_connection(dbname: Optional[str] = None, dsn: Optional[str] = None):
+def get_db_connection(dbname: str | None = None, dsn: str | None = None):
     """Create a connection to the database.
 
     The connection parameters are resolved in the following order:
@@ -115,8 +119,8 @@ def create_database():
         DatabaseConnectionError: Si la connexion échoue
         psycopg2.DatabaseError: Si la création de la base échoue
     """
-    dbname = os.getenv('POSTGRES_DB')
-    default_dbname = os.getenv('POSTGRES_DEFAULT_DB', 'postgres')
+    dbname = os.getenv("POSTGRES_DB")
+    default_dbname = os.getenv("POSTGRES_DEFAULT_DB", "postgres")
 
     if not dbname:
         error_msg = "POSTGRES_DB non défini dans les variables d'environnement"
@@ -134,17 +138,12 @@ def create_database():
         cursor = conn.cursor()
 
         # Vérifier si la base de données existe déjà
-        cursor.execute(
-            "SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s",
-            (dbname,)
-        )
+        cursor.execute("SELECT 1 FROM pg_catalog.pg_database WHERE datname = %s", (dbname,))
         exists = cursor.fetchone()
 
         if not exists:
             # Créer la base de données (utilisation d'identifiant sécurisé)
-            cursor.execute(
-                sql.SQL("CREATE DATABASE {}").format(sql.Identifier(dbname))
-            )
+            cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(dbname)))
             logger.info("Base de données %s créée avec succès.", dbname)
         else:
             logger.info("Base de données %s existe déjà.", dbname)

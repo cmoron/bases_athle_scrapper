@@ -1,20 +1,17 @@
 """Configuration for logging in the scraping project."""
+
 import logging
+import shutil
 import sys
-import os
 from datetime import datetime
 from pathlib import Path
-import shutil
 
 # Répertoires de logs (à la racine du projet, pas dans core/)
-LOG_DIR = Path(__file__).parent.parent / 'logs'
-ARCHIVE_DIR = LOG_DIR / 'archive'
+LOG_DIR = Path(__file__).parent.parent / "logs"
+ARCHIVE_DIR = LOG_DIR / "archive"
 
-def setup_logging(
-    script_name='scraping',
-    console_level=logging.INFO,
-    file_level=logging.DEBUG
-):
+
+def setup_logging(script_name="scraping", console_level=logging.INFO, file_level=logging.DEBUG):
     """
     Configure le logging pour l'application avec rotation automatique.
 
@@ -31,7 +28,7 @@ def setup_logging(
     ARCHIVE_DIR.mkdir(exist_ok=True)
 
     # Nom du fichier de log avec timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_filename = f"{script_name}_{timestamp}.log"
     log_path = LOG_DIR / log_filename
 
@@ -47,12 +44,12 @@ def setup_logging(
 
     # Format
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
+        "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     # Handler fichier
-    file_handler = logging.FileHandler(log_path, encoding='utf-8')
+    file_handler = logging.FileHandler(log_path, encoding="utf-8")
     file_handler.setLevel(file_level)
     file_handler.setFormatter(formatter)
 
@@ -66,9 +63,9 @@ def setup_logging(
     root_logger.addHandler(console_handler)
 
     # Limiter les logs des bibliothèques tierces
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    logging.getLogger('requests').setLevel(logging.WARNING)
-    logging.getLogger('psycopg2').setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("requests").setLevel(logging.WARNING)
+    logging.getLogger("psycopg2").setLevel(logging.WARNING)
 
     # Logger le démarrage
     root_logger.info("=" * 80)
@@ -77,6 +74,7 @@ def setup_logging(
     root_logger.info("=" * 80)
 
     return root_logger
+
 
 def archive_old_logs(script_name, keep_last=5):
     """
@@ -99,6 +97,7 @@ def archive_old_logs(script_name, keep_last=5):
         except Exception as e:
             logging.warning(f"Failed to archive {old_log.name}: {e}")
 
+
 def cleanup_old_archives(days=30):
     """
     Supprime les logs archivés de plus de N jours.
@@ -110,13 +109,14 @@ def cleanup_old_archives(days=30):
 
     cutoff_time = time.time() - (days * 86400)
 
-    for archive_file in ARCHIVE_DIR.glob('*.log'):
+    for archive_file in ARCHIVE_DIR.glob("*.log"):
         if archive_file.stat().st_mtime < cutoff_time:
             try:
                 archive_file.unlink()
                 logging.debug(f"Deleted old archive: {archive_file.name}")
             except Exception as e:
                 logging.warning(f"Failed to delete {archive_file.name}: {e}")
+
 
 def get_logger(name):
     """

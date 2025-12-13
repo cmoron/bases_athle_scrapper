@@ -9,11 +9,12 @@ from pathlib import Path
 # Ajouter le répertoire parent au path pour les imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.db import get_db_connection, DatabaseConnectionError
 from core.config import get_logger, setup_logging
+from core.db import DatabaseConnectionError, get_db_connection
 from core.schema import get_table_stats
 
 logger = get_logger(__name__)
+
 
 def analyze_data_quality():
     """
@@ -31,7 +32,8 @@ def analyze_data_quality():
         # ====================================================================
         # ATHLETES - Qualité des données
         # ====================================================================
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE license_id IS NOT NULL AND license_id != '' AND license_id != '-' AND license_id != 'None') as with_license,
@@ -40,24 +42,26 @@ def analyze_data_quality():
                 COUNT(*) FILTER (WHERE nationality IS NOT NULL AND nationality != '') as with_nationality,
                 COUNT(*) FILTER (WHERE url IS NOT NULL AND url != '') as with_url
             FROM athletes
-        """)
+        """
+        )
         athlete_quality = cursor.fetchone()
 
         if athlete_quality and athlete_quality[0] > 0:
             total = athlete_quality[0]
-            quality_indicators['athletes'] = {
-                'total': total,
-                'completeness': {
-                    'license_id': round(100 * athlete_quality[1] / total, 1),
-                    'birth_date': round(100 * athlete_quality[2] / total, 1),
-                    'sexe': round(100 * athlete_quality[3] / total, 1),
-                    'nationality': round(100 * athlete_quality[4] / total, 1),
-                    'url': round(100 * athlete_quality[5] / total, 1)
-                }
+            quality_indicators["athletes"] = {
+                "total": total,
+                "completeness": {
+                    "license_id": round(100 * athlete_quality[1] / total, 1),
+                    "birth_date": round(100 * athlete_quality[2] / total, 1),
+                    "sexe": round(100 * athlete_quality[3] / total, 1),
+                    "nationality": round(100 * athlete_quality[4] / total, 1),
+                    "url": round(100 * athlete_quality[5] / total, 1),
+                },
             }
 
         # Doublons potentiels (même nom + même année de naissance)
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*) FROM (
                 SELECT normalized_name, birth_date, COUNT(*) as cnt
                 FROM athletes
@@ -65,42 +69,47 @@ def analyze_data_quality():
                 GROUP BY normalized_name, birth_date
                 HAVING COUNT(*) > 1
             ) AS duplicates
-        """)
+        """
+        )
         potential_duplicates = cursor.fetchone()[0]
-        quality_indicators['athletes']['potential_duplicates'] = potential_duplicates
+        quality_indicators["athletes"]["potential_duplicates"] = potential_duplicates
 
         # ====================================================================
         # CLUBS - Qualité des données
         # ====================================================================
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE first_year IS NOT NULL) as with_first_year,
                 COUNT(*) FILTER (WHERE last_year IS NOT NULL) as with_last_year,
                 COUNT(*) FILTER (WHERE url IS NOT NULL AND url != '') as with_url
             FROM clubs
-        """)
+        """
+        )
         club_quality = cursor.fetchone()
 
         if club_quality and club_quality[0] > 0:
             total = club_quality[0]
-            quality_indicators['clubs'] = {
-                'total': total,
-                'completeness': {
-                    'first_year': round(100 * club_quality[1] / total, 1),
-                    'last_year': round(100 * club_quality[2] / total, 1),
-                    'url': round(100 * club_quality[3] / total, 1)
-                }
+            quality_indicators["clubs"] = {
+                "total": total,
+                "completeness": {
+                    "first_year": round(100 * club_quality[1] / total, 1),
+                    "last_year": round(100 * club_quality[2] / total, 1),
+                    "url": round(100 * club_quality[3] / total, 1),
+                },
             }
 
         # Clubs actifs récemment
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT COUNT(*)
             FROM clubs
             WHERE last_year >= EXTRACT(YEAR FROM NOW()) - 2
-        """)
+        """
+        )
         active_clubs = cursor.fetchone()[0]
-        quality_indicators['clubs']['active_recently'] = active_clubs
+        quality_indicators["clubs"]["active_recently"] = active_clubs
 
         return quality_indicators
 
@@ -110,6 +119,7 @@ def analyze_data_quality():
     finally:
         cursor.close()
         conn.close()
+
 
 def analyze_urls():
     """
@@ -125,33 +135,37 @@ def analyze_urls():
 
     try:
         # Athletes URLs
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 COUNT(*) FILTER (WHERE url LIKE '%www.athle.fr/athletes/%') as new_format,
                 COUNT(*) FILTER (WHERE url LIKE '%bases.athle.fr%') as old_format,
                 COUNT(*) FILTER (WHERE url IS NULL OR url = '') as missing
             FROM athletes
-        """)
+        """
+        )
         athlete_urls = cursor.fetchone()
-        url_stats['athletes'] = {
-            'new_format': athlete_urls[0],
-            'old_format': athlete_urls[1],
-            'missing': athlete_urls[2]
+        url_stats["athletes"] = {
+            "new_format": athlete_urls[0],
+            "old_format": athlete_urls[1],
+            "missing": athlete_urls[2],
         }
 
         # Clubs URLs
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 COUNT(*) FILTER (WHERE url LIKE '%www.athle.fr%') as new_format,
                 COUNT(*) FILTER (WHERE url LIKE '%bases.athle.fr%') as old_format,
                 COUNT(*) FILTER (WHERE url IS NULL OR url = '') as missing
             FROM clubs
-        """)
+        """
+        )
         club_urls = cursor.fetchone()
-        url_stats['clubs'] = {
-            'new_format': club_urls[0],
-            'old_format': club_urls[1],
-            'missing': club_urls[2]
+        url_stats["clubs"] = {
+            "new_format": club_urls[0],
+            "old_format": club_urls[1],
+            "missing": club_urls[2],
         }
 
         return url_stats
@@ -162,6 +176,7 @@ def analyze_urls():
     finally:
         cursor.close()
         conn.close()
+
 
 def print_report():
     """Affiche un rapport complet d'analyse."""
@@ -174,22 +189,26 @@ def print_report():
     print("-" * 80)
     stats = get_table_stats()
     if stats:
-        if 'athletes' in stats:
-            print(f"\nAthlètes:")
+        if "athletes" in stats:
+            print("\nAthlètes:")
             print(f"  Total                    : {stats['athletes']['total']:,}")
             print(f"  Avec license_id valide   : {stats['athletes']['with_valid_license']:,}")
             print(f"  Sans license_id          : {stats['athletes']['without_license']:,}")
             print(f"  Hommes                   : {stats['athletes']['male']:,}")
             print(f"  Femmes                   : {stats['athletes']['female']:,}")
-            if stats['athletes']['oldest_year'] and stats['athletes']['youngest_year']:
-                print(f"  Années de naissance      : {stats['athletes']['oldest_year']} - {stats['athletes']['youngest_year']}")
+            if stats["athletes"]["oldest_year"] and stats["athletes"]["youngest_year"]:
+                print(
+                    f"  Années de naissance      : {stats['athletes']['oldest_year']} - {stats['athletes']['youngest_year']}"
+                )
 
-        if 'clubs' in stats:
-            print(f"\nClubs:")
+        if "clubs" in stats:
+            print("\nClubs:")
             print(f"  Total                    : {stats['clubs']['total']:,}")
-            if stats['clubs']['earliest_year'] and stats['clubs']['latest_year']:
-                print(f"  Années d'activité        : {stats['clubs']['earliest_year']} - {stats['clubs']['latest_year']}")
-            if stats['clubs']['avg_years_active']:
+            if stats["clubs"]["earliest_year"] and stats["clubs"]["latest_year"]:
+                print(
+                    f"  Années d'activité        : {stats['clubs']['earliest_year']} - {stats['clubs']['latest_year']}"
+                )
+            if stats["clubs"]["avg_years_active"]:
                 print(f"  Durée moyenne d'activité : {stats['clubs']['avg_years_active']:.1f} ans")
 
     # Qualité des données
@@ -197,21 +216,21 @@ def print_report():
     print("-" * 80)
     quality = analyze_data_quality()
 
-    if quality and 'athletes' in quality:
-        print(f"\nAthlètes (complétude des champs):")
-        comp = quality['athletes']['completeness']
+    if quality and "athletes" in quality:
+        print("\nAthlètes (complétude des champs):")
+        comp = quality["athletes"]["completeness"]
         print(f"  license_id   : {comp['license_id']:>5.1f}%")
         print(f"  birth_date   : {comp['birth_date']:>5.1f}%")
         print(f"  sexe         : {comp['sexe']:>5.1f}%")
         print(f"  nationality  : {comp['nationality']:>5.1f}%")
         print(f"  url          : {comp['url']:>5.1f}%")
 
-        if quality['athletes']['potential_duplicates'] > 0:
+        if quality["athletes"]["potential_duplicates"] > 0:
             print(f"\n⚠️  Doublons potentiels     : {quality['athletes']['potential_duplicates']:,}")
 
-    if quality and 'clubs' in quality:
-        print(f"\nClubs (complétude des champs):")
-        comp = quality['clubs']['completeness']
+    if quality and "clubs" in quality:
+        print("\nClubs (complétude des champs):")
+        comp = quality["clubs"]["completeness"]
         print(f"  first_year   : {comp['first_year']:>5.1f}%")
         print(f"  last_year    : {comp['last_year']:>5.1f}%")
         print(f"  url          : {comp['url']:>5.1f}%")
@@ -222,21 +241,33 @@ def print_report():
     print("-" * 80)
     url_stats = analyze_urls()
 
-    if url_stats and 'athletes' in url_stats:
-        print(f"\nAthlètes:")
-        total_urls = sum(url_stats['athletes'].values())
+    if url_stats and "athletes" in url_stats:
+        print("\nAthlètes:")
+        total_urls = sum(url_stats["athletes"].values())
         if total_urls > 0:
-            print(f"  Nouveau format : {url_stats['athletes']['new_format']:,} ({100*url_stats['athletes']['new_format']/total_urls:.1f}%)")
-            print(f"  Ancien format  : {url_stats['athletes']['old_format']:,} ({100*url_stats['athletes']['old_format']/total_urls:.1f}%)")
-            print(f"  Manquantes     : {url_stats['athletes']['missing']:,} ({100*url_stats['athletes']['missing']/total_urls:.1f}%)")
+            print(
+                f"  Nouveau format : {url_stats['athletes']['new_format']:,} ({100*url_stats['athletes']['new_format']/total_urls:.1f}%)"
+            )
+            print(
+                f"  Ancien format  : {url_stats['athletes']['old_format']:,} ({100*url_stats['athletes']['old_format']/total_urls:.1f}%)"
+            )
+            print(
+                f"  Manquantes     : {url_stats['athletes']['missing']:,} ({100*url_stats['athletes']['missing']/total_urls:.1f}%)"
+            )
 
-    if url_stats and 'clubs' in url_stats:
-        print(f"\nClubs:")
-        total_urls = sum(url_stats['clubs'].values())
+    if url_stats and "clubs" in url_stats:
+        print("\nClubs:")
+        total_urls = sum(url_stats["clubs"].values())
         if total_urls > 0:
-            print(f"  Nouveau format : {url_stats['clubs']['new_format']:,} ({100*url_stats['clubs']['new_format']/total_urls:.1f}%)")
-            print(f"  Ancien format  : {url_stats['clubs']['old_format']:,} ({100*url_stats['clubs']['old_format']/total_urls:.1f}%)")
-            print(f"  Manquantes     : {url_stats['clubs']['missing']:,} ({100*url_stats['clubs']['missing']/total_urls:.1f}%)")
+            print(
+                f"  Nouveau format : {url_stats['clubs']['new_format']:,} ({100*url_stats['clubs']['new_format']/total_urls:.1f}%)"
+            )
+            print(
+                f"  Ancien format  : {url_stats['clubs']['old_format']:,} ({100*url_stats['clubs']['old_format']/total_urls:.1f}%)"
+            )
+            print(
+                f"  Manquantes     : {url_stats['clubs']['missing']:,} ({100*url_stats['clubs']['missing']/total_urls:.1f}%)"
+            )
 
     # Recommandations
     print("\n\n💡 RECOMMANDATIONS")
@@ -244,16 +275,22 @@ def print_report():
 
     recommendations = []
 
-    if url_stats and 'athletes' in url_stats:
-        if url_stats['athletes']['old_format'] > 0:
-            recommendations.append(f"⚠️  {url_stats['athletes']['old_format']:,} athlètes avec anciennes URLs à mettre à jour")
+    if url_stats and "athletes" in url_stats:
+        if url_stats["athletes"]["old_format"] > 0:
+            recommendations.append(
+                f"⚠️  {url_stats['athletes']['old_format']:,} athlètes avec anciennes URLs à mettre à jour"
+            )
 
-    if quality and 'athletes' in quality:
-        if quality['athletes']['completeness']['license_id'] < 90:
-            recommendations.append(f"⚠️  {100 - quality['athletes']['completeness']['license_id']:.1f}% des athlètes sans license_id valide")
+    if quality and "athletes" in quality:
+        if quality["athletes"]["completeness"]["license_id"] < 90:
+            recommendations.append(
+                f"⚠️  {100 - quality['athletes']['completeness']['license_id']:.1f}% des athlètes sans license_id valide"
+            )
 
-        if quality['athletes']['potential_duplicates'] > 0:
-            recommendations.append(f"⚠️  {quality['athletes']['potential_duplicates']:,} doublons potentiels à vérifier")
+        if quality["athletes"]["potential_duplicates"] > 0:
+            recommendations.append(
+                f"⚠️  {quality['athletes']['potential_duplicates']:,} doublons potentiels à vérifier"
+            )
 
     if recommendations:
         for rec in recommendations:
@@ -263,9 +300,10 @@ def print_report():
 
     print("\n" + "=" * 80 + "\n")
 
+
 def main():
     """Fonction principale"""
-    setup_logging('analyze_database')
+    setup_logging("analyze_database")
 
     try:
         print_report()
@@ -275,8 +313,10 @@ def main():
     except Exception as e:
         logger.error(f"Erreur inattendue: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

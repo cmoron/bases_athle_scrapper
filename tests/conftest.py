@@ -1,6 +1,7 @@
 """
 Fixtures pytest pour les tests avec PostgreSQL via testcontainers.
 """
+
 import os
 import sys
 from pathlib import Path
@@ -33,8 +34,8 @@ def postgres_schema(postgres_container):
     Crée le schéma complet de la base de données dans le conteneur PostgreSQL.
     Cette fixture dépend de postgres_container et n'est exécutée qu'une fois par session.
     """
-    from core.schema import create_tables
     from core.db import get_db_connection
+    from core.schema import create_tables
 
     # Configurer la variable d'environnement pour que get_db_connection() utilise le conteneur
     os.environ["DATABASE_URL"] = postgres_container

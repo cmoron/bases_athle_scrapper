@@ -2,6 +2,7 @@
 Tests for duplicate athlete handling based on license_id.
 Utilise PostgreSQL via testcontainers (voir conftest.py).
 """
+
 import sys
 from pathlib import Path
 
