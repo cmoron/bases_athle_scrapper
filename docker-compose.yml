@@ -12,7 +12,9 @@ services:
     restart: unless-stopped
 
   scraper:
-    build: .
+    build: 
+      context: .
+      target: dev
     depends_on:
       - postgres
     environment:
@@ -21,6 +23,7 @@ services:
       DB_PORT: 5432
     volumes:
       - ./logs:/app/logs  # Persist logs on host
+      - .:/app  # Mount current directory to /app in container
     restart: "no"
 
 volumes:

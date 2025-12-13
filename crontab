@@ -1,0 +1,5 @@
+# Crontab for mypacer_scraper
+# Format: MIN HOUR DAY MONTH WEEKDAY COMMAND
+
+# Update database every Monday at 3:00 AM
+0 3 * * 1 cd /app && ./update_database.sh

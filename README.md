@@ -188,6 +188,12 @@ Voir [.github/workflows/ci.yml](.github/workflows/ci.yml)
 - **Index GIN** : Recherche trigram sur les noms
 - **Index partiel** : Unicité conditionnelle sur `license_id`
 
+## 📚 Documentation
+
+- **[REFACTORING.md](docs/REFACTORING.md)** - Historique et détails du refactoring du projet
+- **[SETUP_SONARCLOUD.md](docs/SETUP_SONARCLOUD.md)** - Guide de configuration de SonarCloud
+- **[DOCKER_CRON.md](docs/DOCKER_CRON.md)** - Automatisation avec Supercronic (tâches planifiées)
+
 ## 🤝 Contribution
 
 1. Fork le projet
