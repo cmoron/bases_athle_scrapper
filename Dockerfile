@@ -41,8 +41,9 @@ COPY --chown=appuser:appuser tools/ ./tools/
 COPY --chown=appuser:appuser populate_database.sh update_database.sh ./
 COPY --chown=appuser:appuser crontab ./crontab
 
-# Make scripts executable
-RUN chmod +x populate_database.sh update_database.sh
+# Remove write permissions and make scripts executable (read-only + execute)
+RUN chmod -R a-w /app && \
+    chmod 555 populate_database.sh update_database.sh
 
 # Switch to non-root user
 USER appuser
@@ -76,8 +77,9 @@ COPY --chown=appuser:appuser tools/ ./tools/
 COPY --chown=appuser:appuser populate_database.sh update_database.sh ./
 COPY --chown=appuser:appuser crontab ./crontab
 
-# Make scripts executable
-RUN chmod +x populate_database.sh update_database.sh
+# Remove write permissions and make scripts executable (read-only + execute)
+RUN chmod -R a-w /app && \
+    chmod 555 populate_database.sh update_database.sh
 
 # Switch to non-root user
 USER appuser
