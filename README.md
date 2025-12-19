@@ -1,4 +1,4 @@
-# Bases Athlé Scraper 🏃
+# MyPacer Scraper 🏃
 
 [![CI](https://github.com/cmoron/mypacer_scraper/actions/workflows/ci.yml/badge.svg)](https://github.com/cmoron/mypacer_scraper/actions/workflows/ci.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=cmoron_mypacer_scraper&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=cmoron_mypacer_scraper)
@@ -10,7 +10,16 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 
-Scraper des données d'athlétisme de la FFA (Fédération Française d'Athlétisme) depuis [bases.athle.fr](https://www.athle.fr/bases/).
+Scraper haute performance des données d'athlétisme de la FFA depuis [athle.fr](https://www.athle.fr/).
+
+## 🎯 Rôle Fonctionnel
+
+Ce module est la brique d'acquisition de données de l'écosystème MyPacer. Son rôle est de **constituer un annuaire local indexable** pour contourner les limitations de recherche du site officiel.
+
+Il ne stocke pas les performances (qui sont récupérées en live par l'API), mais construit le référentiel d'identité (Nom, Club, ID FFA) nécessaire pour :
+1.  Permettre une recherche instantanée (auto-complétion).
+2.  Autoriser la recherche floue (trouver un athlète avec une orthographe approximative).
+3.  Normaliser les données des licenciés.
 
 ## 🚀 Installation
 
