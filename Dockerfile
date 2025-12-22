@@ -41,9 +41,14 @@ COPY --chown=appuser:appuser tools/ ./tools/
 COPY --chown=appuser:appuser populate_database.sh update_database.sh ./
 COPY --chown=appuser:appuser crontab ./crontab
 
-# Remove write permissions and make scripts executable (read-only + execute)
+# Create logs directory with proper permissions BEFORE removing write access
+RUN mkdir -p /app/logs/archive && \
+    chown -R appuser:appuser /app/logs
+
+# Remove write permissions except for logs, and make scripts executable
 RUN chmod -R a-w /app && \
-    chmod 555 populate_database.sh update_database.sh
+    chmod 555 populate_database.sh update_database.sh && \
+    chmod -R u+w /app/logs
 
 # Switch to non-root user
 USER appuser
@@ -77,9 +82,14 @@ COPY --chown=appuser:appuser tools/ ./tools/
 COPY --chown=appuser:appuser populate_database.sh update_database.sh ./
 COPY --chown=appuser:appuser crontab ./crontab
 
-# Remove write permissions and make scripts executable (read-only + execute)
+# Create logs directory with proper permissions BEFORE removing write access
+RUN mkdir -p /app/logs/archive && \
+    chown -R appuser:appuser /app/logs
+
+# Remove write permissions except for logs, and make scripts executable
 RUN chmod -R a-w /app && \
-    chmod 555 populate_database.sh update_database.sh
+    chmod 555 populate_database.sh update_database.sh && \
+    chmod -R u+w /app/logs
 
 # Switch to non-root user
 USER appuser
