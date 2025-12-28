@@ -1,5 +1,13 @@
 -- ============================================================================
--- Schéma de base de données pour Bases Athlé
+-- Schéma de base de données pour Bases Athlé (DEV LOCAL)
+-- ============================================================================
+-- ⚠️ COPIE LOCALE POUR DÉVELOPPEMENT AUTONOME
+--
+-- Source de vérité : mypacer_infra/init-db/01-init-schema.sql
+-- En cas de divergence, le schéma de l'infra fait foi.
+--
+-- Ce fichier permet au scraper d'être développé de manière autonome
+-- sans dépendre du repo mypacer_infra.
 -- ============================================================================
 
 -- Extensions nécessaires
