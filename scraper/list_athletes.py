@@ -8,6 +8,7 @@ import re
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
+from time import time
 
 import psycopg2
 import requests
@@ -551,6 +552,7 @@ def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) ->
         last_year (int): The last year
         club_id (str): The club FFA ID
     """
+    start_time = time()
     try:
         ensure_schema_exists()
         logger.info("Processing years from %s to %s", first_year, last_year)
@@ -575,6 +577,21 @@ def process_clubs_and_athletes(first_year: int, last_year: int, club_id: str) ->
                     raise
                 athletes = extract_athletes_from_club(year, club_ffa_id)
                 store_athletes(athletes)
+
+        # Print final summary
+        duration = time() - start_time
+        hours = int(duration // 3600)
+        minutes = int((duration % 3600) // 60)
+        seconds = int(duration % 60)
+
+        logger.info("=" * 80)
+        logger.info("✅ SCRAPING TERMINÉ")
+        logger.info("=" * 80)
+        logger.info("📊 Athlètes ajoutés : %s", f"{total_athletes:,}".replace(",", " "))
+        logger.info("📅 Période traitée : %s - %s", first_year, last_year)
+        logger.info("⏱️  Durée : %dh %02dmin %02ds", hours, minutes, seconds)
+        logger.info("=" * 80)
+
     except KeyboardInterrupt:
         logger.error("Interrupted by user")
         raise
@@ -616,7 +633,6 @@ def main():
         update_athletes_info()
     else:
         process_clubs_and_athletes(first_year, last_year, args.club_id)
-        logger.info("Scrapping terminé : %s athlètes", total_athletes)
 
 
 if __name__ == "__main__":
